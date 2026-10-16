@@ -1,0 +1,3071 @@
+<!DOCTYPE html>
+<!--
+  HoloForge Viewer v1.4.0
+  - Centered: Camera offset removed for true screen centering
+  - Slideshow: Advance only on double-tap (prevents rotation mis-trigger)
+  - Persistent: Grid, colors, scale auto-saved
+  - Multi-Drop: ZIP and multi-file drag & drop support
+  - Extended: PLY, FBX, COLLADA, STEP, IGES support
+  - Fixed: GLB Black Rendering (RoomEnvironment IBL + DoubleSide)
+  - Fixed: setMeshoptDecoder error (MeshoptDecoder added)
+  single-file 3D CAD viewer / Three.js r160
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
+<meta name="theme-color" content="#06080e">
+<title>HoloForge Viewer v1.4.0</title>
+<script type="text/javascript" nonce="d8f325e8992b4c14aa4c8976b96" src="//local.adguard.org?ts=1791871653595&amp;type=content-script&amp;dmn=chat.sakana.ai&amp;url=https%3A%2F%2Fchat.sakana.ai%2Fapi%2Fconversation%2F01a1335f-7b3b-749f-98b7-2f85275998b2%2Foutput%2Fbf19507ad86a51e234cf8e6034de9c6b61bf283e0b6a99cf156d267bef78a77c&amp;app=com.android.chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23090c14'/%3E%3Cpath d='M50 13 L84 33 L84 67 L50 87 L16 67 L16 33 Z' fill='none' stroke='%2300e5ff' stroke-width='6' stroke-linejoin='round'/%3E%3Cpath d='M55 29 L36 57 L48 57 L44 77 L65 46 L52 46 Z' fill='%23ff3d80'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --bg: #06080e;
+  --surface: #0e1320;
+  --surface-2: #161d2e;
+  --ink: #e8ecf4;
+  --muted: #93a6c8;
+  --accent: #00e5ff;
+  --accent-2: #ff3d80;
+  --line: rgba(122,138,173,0.18);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --header-h: 56px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%; height: 100%; height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+body.is-fullscreen {
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+#canvas-container { position: fixed; inset: 0; z-index: 1; }
+#canvas-container canvas { display: block; width: 100% !important; height: 100% !important; }
+
+.app-header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: transparent;
+  border-bottom: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; z-index: 100; gap: 12px;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 12px rgba(0,0,0,0.8);
+}
+.title-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.app-title {
+  font-family: "Orbitron", "Noto Sans JP", sans-serif;
+  font-weight: 700; font-size: clamp(14px, 3.5vw, 18px); letter-spacing: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  white-space: nowrap;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.95)) drop-shadow(0 0 8px rgba(0,0,0,0.75));
+}
+.version-badge {
+  font-family: "Orbitron", monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: 1px; color: var(--accent);
+  border: 1px solid rgba(0,229,255,0.45); border-radius: 999px;
+  padding: 2px 8px; white-space: nowrap; flex: none;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+}
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink); font-size: 13px; font-family: inherit;
+  cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--accent); }
+.btn:active { transform: scale(0.96); }
+.btn.active { background: rgba(0,229,255,0.12); border-color: var(--accent); color: var(--accent); }
+.btn:disabled, .btn.disabled { opacity: 0.35; pointer-events: none; }
+.btn-icon { width: 40px; height: 40px; padding: 0; font-size: 18px; }
+.btn-svg {
+  width: 17px; height: 17px; flex: none;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+input[type="file"] { display: none; }
+
+/* ===== Toolbar ===== */
+.toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  z-index: 103;
+  background: transparent;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 12px rgba(0,0,0,0.8);
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.toolbar-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid rgba(122,138,173,0.22);
+  background: rgba(14,19,32,0.82);
+  color: #cfdcf3;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: transform 0.13s ease, background 0.13s ease, border-color 0.13s ease, color 0.13s ease, box-shadow 0.13s ease;
+  flex: none;
+  padding: 0;
+  font-family: inherit;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.toolbar-btn svg {
+  width: 21px; height: 21px; display: block;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.toolbar-btn:hover { background: rgba(22,29,46,0.95); border-color: rgba(0,229,255,0.55); color: #e8f6ff; }
+.toolbar-btn:active { transform: scale(0.9); }
+.toolbar-btn.active {
+  background: rgba(0,229,255,0.14);
+  border-color: rgba(0,229,255,0.7);
+  color: var(--accent);
+}
+.toolbar-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+.toolbar-btn.rotating {
+  background: rgba(0,229,255,0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0,229,255,0.45), 0 0 16px rgba(0,229,255,0.5);
+  animation: rotGlow 1.6s ease-in-out infinite;
+}
+.toolbar-btn.rotating svg { animation: rotSpin 2.4s linear infinite; }
+@keyframes rotGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(0,229,255,0.45), 0 0 14px rgba(0,229,255,0.4); }
+  50%      { box-shadow: 0 0 0 1px rgba(0,229,255,0.75), 0 0 22px rgba(0,229,255,0.75); }
+}
+@keyframes rotSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-btn.rotating, .toolbar-btn.rotating svg { animation: none; }
+}
+
+.seg-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg-btn {
+  flex: 1 1 auto; min-width: 62px;
+  padding: 8px 6px;
+  border-radius: 9px;
+  border: 1px solid rgba(122,138,173,0.22);
+  background: rgba(14,19,32,0.82);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+}
+.seg-btn:hover { background: rgba(22,29,46,0.95); color: #e8f6ff; }
+.seg-btn:active { transform: scale(0.94); }
+.seg-btn.active {
+  background: rgba(0,229,255,0.14);
+  border-color: rgba(0,229,255,0.7);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(0,229,255,0.18);
+}
+
+.toolbar-btn.playing {
+  background: rgba(255,61,128,0.18);
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+  animation: slideGlow 1.8s ease-in-out infinite;
+}
+@keyframes slideGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,61,128,0.4), 0 0 12px rgba(255,61,128,0.3); }
+  50%      { box-shadow: 0 0 0 1px rgba(255,61,128,0.7), 0 0 20px rgba(255,61,128,0.6); }
+}
+@media (prefers-reduced-motion: reduce) { .toolbar-btn.playing { animation: none; } }
+
+.slide-status {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  word-break: break-all;
+}
+.slide-status b { color: var(--accent); font-family: "Orbitron", monospace; font-weight: 500; }
+
+:-webkit-full-screen, :fullscreen { width: 100% !important; height: 100% !important; }
+:-webkit-full-screen html, :-webkit-full-screen body, :fullscreen html, :fullscreen body {
+  width: 100% !important; height: 100% !important; overflow: hidden !important;
+}
+
+.toolbar-popup.compact { min-width: 200px; max-width: 240px; }
+.toolbar-popup.compact .popup-body { padding: 10px 14px 12px; }
+
+.toolbar-popup {
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0;
+  min-width: 220px;
+  max-width: 92vw;
+  z-index: 104;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.toolbar-popup.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.popup-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  padding: 12px 16px 0;
+  text-transform: uppercase;
+}
+.popup-body { padding: 10px 16px 14px; }
+.popup-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.popup-sub {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: none;
+}
+.popup-sub.show { display: block; }
+.popup-sub-label {
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-family: "Orbitron", sans-serif;
+  text-transform: uppercase;
+}
+.popup-overlay {
+  position: fixed; inset: 0; z-index: 102;
+  background: transparent; pointer-events: none; display: none;
+}
+
+.color-presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-dot { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; position: relative; }
+.color-dot:hover { transform: scale(1.15); }
+.color-dot.active { border-color: var(--ink); box-shadow: 0 0 8px currentColor; }
+.color-dot input[type="color"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+
+.slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 140px; }
+.slider-wrap label { font-size: 12px; color: var(--muted); min-width: 48px; }
+input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: var(--surface-2); border-radius: 2px; outline: none; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 8px var(--accent); }
+input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none; box-shadow: 0 0 8px var(--accent); }
+
+.info-overlay {
+  position: fixed; top: calc(var(--header-h) + 8px); right: 8px; z-index: 90;
+  background: transparent; border: none;
+  padding: 10px 14px; min-width: 172px; font-size: 12px; line-height: 1.9; pointer-events: none;
+  transition: opacity 0.35s ease;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 12px rgba(0,0,0,0.8);
+}
+.info-overlay .val { color: var(--accent); font-family: "Orbitron", monospace; font-weight: 500; }
+.info-overlay .dims { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; }
+.info-overlay .stats { display: block; }
+.file-row { display: flex; align-items: center; gap: 6px; max-width: 230px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(122,138,173,0.28); }
+.file-icon { font-size: 12px; opacity: 0.8; flex: none; }
+.file-name { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.file-name.demo { color: var(--muted); }
+
+.toast {
+  position: fixed; bottom: 180px; left: 50%; transform: translateX(-50%) translateY(20px); z-index: 120;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: all 0.3s ease;
+  max-width: 90vw; text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.rec-badge {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 216px; z-index: 130;
+  background: rgba(24,4,12,0.8); border: 1px solid rgba(255,61,128,0.65); color: #ff6d9c;
+  border-radius: 999px; padding: 5px 14px;
+  font-family: "Orbitron", monospace; font-size: 11px; letter-spacing: 2px;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  display: flex; align-items: center; gap: 8px;
+}
+.rec-badge.show { opacity: 1; }
+.rec-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3d80; animation: recblink 1s steps(2, start) infinite; }
+@keyframes recblink { 50% { opacity: 0.15; } }
+
+.loading-screen { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; transition: opacity 0.5s; }
+.loading-screen.hide { opacity: 0; pointer-events: none; }
+.loader-ring { width: 48px; height: 48px; border: 3px solid var(--surface-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-screen p { font-family: "Orbitron", "Noto Sans JP", sans-serif; color: var(--muted); letter-spacing: 3px; font-size: 12px; }
+.loading-screen .load-ver { letter-spacing: 2px; font-size: 10px; opacity: 0.75; margin-top: -12px; }
+
+.load-overlay { position: fixed; inset: 0; z-index: 190; display: none; align-items: center; justify-content: center; background: rgba(3,5,10,0.72); }
+.load-overlay.show { display: flex; }
+.load-card { width: min(340px, 84vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 20px 16px; text-align: center; box-shadow: 0 18px 48px rgba(0,0,0,0.55); }
+.load-spinner { width: 34px; height: 34px; margin: 0 auto 12px; border: 3px solid var(--surface-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+.load-title { font-family: "Orbitron", "Noto Sans JP", sans-serif; font-size: 13px; letter-spacing: 2px; color: var(--ink); margin-bottom: 6px; }
+.load-stage { font-size: 12px; color: var(--muted); min-height: 18px; margin-bottom: 12px; }
+.load-bar-wrap { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.load-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 3px; transition: width 0.25s ease; }
+.load-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 8px; font-family: "Orbitron", monospace; }
+
+.touch-hint {
+  position: fixed; bottom: 200px; left: 50%; transform: translateX(-50%); z-index: 80;
+  background: rgba(6,8,14,0.7); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 8px 14px; font-size: 12px; color: var(--muted); pointer-events: none; opacity: 0; transition: opacity 0.5s;
+  white-space: nowrap;
+}
+.touch-hint.show { opacity: 1; }
+
+body.ui-hidden .app-header { opacity: 0; transform: translateY(-100%); pointer-events: none; }
+body.ui-hidden .info-overlay { opacity: 0; }
+body.ui-hidden .toolbar { opacity: 0; transform: translateY(100%); pointer-events: none; }
+body.ui-hidden .toolbar-popup { opacity: 0 !important; pointer-events: none !important; }
+body.ui-hidden .touch-hint { opacity: 0; }
+
+@media (min-width: 768px) {
+  .toolbar { left: auto; right: 20px; bottom: 20px; width: auto; padding: 0; gap: 8px; }
+  .toolbar-popup { left: auto; right: 20px; bottom: 72px; transform: translateX(0) translateY(12px); }
+  .toolbar-popup.show { transform: translateX(0) translateY(0); }
+  .info-overlay { top: calc(var(--header-h) + 8px); left: 8px; right: auto; }
+  .touch-hint { bottom: 24px; }
+  .toast { bottom: 24px; left: auto; right: 24px; transform: translateY(20px); }
+  .toast.show { transform: translateY(0); }
+  .rec-badge { bottom: 24px; left: 24px; transform: none; }
+}
+@media (max-width: 767px) {
+  .app-title { letter-spacing: 1px; }
+  .btn { padding: 8px 10px; font-size: 12px; }
+  .btn-text-hide span { display: none; }
+  .info-overlay { top: calc(var(--header-h) + 6px); left: 8px; right: 8px; min-width: auto; padding: 8px 12px; font-size: 11px; line-height: 1.7; }
+  .info-overlay .dims { grid-template-columns: auto 1fr auto 1fr auto 1fr; }
+  .info-overlay .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .file-row { max-width: none; margin-bottom: 4px; padding-bottom: 4px; }
+  .file-name { flex: 1; }
+}
+</style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen">
+  <div class="loader-ring"></div>
+  <p>HOLOFORGE VIEWER</p>
+  <p class="load-ver">v1.4.0</p>
+</div>
+
+<header class="app-header">
+  <div class="title-group">
+    <div class="app-title">⬡ HOLOFORGE</div>
+    <span class="version-badge" id="versionBadge">v1.4.0</span>
+  </div>
+  <div class="header-actions">
+    <label class="btn btn-text-hide" title="3Dファイルを開く">
+      <svg class="btn-svg" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.8 2.2H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M9.5 13.5h5M12 11v5"/></svg>
+      <span>ファイル</span>
+      <input type="file" id="fileInput" accept=".stl,.obj,.glb,.gltf,.3mf,.ply,.fbx,.dae,.step,.stp,.iges,.igs,.zip">
+    </label>
+    <button class="btn btn-icon" id="btnReset" title="デモモデルに戻す">↺</button>
+    <button class="btn btn-icon" id="btnFull" title="全画面">⛶</button>
+  </div>
+</header>
+
+<div id="canvas-container"></div>
+
+<div class="info-overlay" id="infoOverlay">
+  <div class="file-row">
+    <span class="file-icon">📄</span>
+    <span class="file-name demo" id="fileNameVal" title="デモモデル">デモモデル</span>
+  </div>
+  <div class="dims">
+    <span style="color:var(--muted)">X</span><span><span class="val" id="dimX">—</span> mm</span>
+    <span style="color:var(--muted)">Y</span><span><span class="val" id="dimY">—</span> mm</span>
+    <span style="color:var(--muted)">Z</span><span><span class="val" id="dimZ">—</span> mm</span>
+  </div>
+  <div class="stats">
+    <div>体積: <span class="val" id="volVal">—</span> <span style="color:var(--muted)">mm³</span></div>
+    <div>パーツ: <span class="val" id="partVal">1</span></div>
+    <div>頂点: <span class="val" id="vertVal">—</span></div>
+    <div>面数: <span class="val" id="faceVal">—</span></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="load-overlay" id="loadOverlay">
+  <div class="load-card">
+    <div class="load-spinner"></div>
+    <div class="load-title" id="loadTitle">読み込み中</div>
+    <div class="load-stage" id="loadStage">準備しています…</div>
+    <div class="load-bar-wrap"><div class="load-bar" id="loadBar"></div></div>
+    <div class="load-meta">
+      <span id="loadPct">0%</span>
+      <span id="loadEta">残り時間を計算中…</span>
+    </div>
+  </div>
+</div>
+<div class="rec-badge" id="recBadge"><span class="dot"></span>REC <span id="recSec">0</span>s</div>
+<div class="touch-hint" id="touchHint">1本指: 回転 / 2本指: ズームパン / 2回タップ: 次のモデル（スライド時）</div>
+
+<div class="toolbar" id="toolbar">
+  <button class="toolbar-btn" id="btnTbView" title="表示設定" aria-label="表示設定">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbMode" title="表示モード" aria-label="表示モード">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" opacity="0.45"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbExplode" title="分解表示" aria-label="分解表示">
+    <svg viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l14 10M19 7L5 17"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbRotate" title="回転" aria-label="回転">
+    <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbOrient" title="向き補正" aria-label="向き補正">
+    <svg viewBox="0 0 24 24"><path d="M12 2l3 4h-6z"/><path d="M12 6v16"/><path d="M5 12l7-5 7 5"/><path d="M2 12h20"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbRecord" title="録画" aria-label="録画">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5z"/></svg>
+  </button>
+  <button class="toolbar-btn" id="btnTbSlide" title="スライドショー" aria-label="スライドショー">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="13" rx="2"/><path d="M12 17.5V21M8.5 21h7"/><path d="M11 8.2l4 2.8-4 2.8z"/></svg>
+  </button>
+</div>
+
+<!-- Popup: View -->
+<div class="toolbar-popup" id="popupView" data-parent="btnTbView">
+  <div class="popup-title">表示設定</div>
+  <div class="popup-body">
+    <button class="btn active" id="btnGrid" style="width:100%;margin-bottom:10px;">グリッド ON</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">背景色</div>
+    <div class="popup-row">
+      <div class="color-dot active" style="background:#06080e" data-bg="#06080e" title="ダーク"></div>
+      <div class="color-dot" style="background:#0e1320" data-bg="#0e1320" title="ネイビー"></div>
+      <div class="color-dot" style="background:#20242c" data-bg="#20242c" title="チャコール"></div>
+      <div class="color-dot" style="background:#f0f2f5" data-bg="#f0f2f5" title="ライト"></div>
+      <div class="color-dot" style="background:linear-gradient(45deg,#00e5ff,#ff3d80);" id="customBgDot">
+        <input type="color" id="bgPicker" value="#06080e">
+      </div>
+    </div>
+    <div class="popup-sub show" id="scaleSection">
+      <div class="popup-sub-label">モデルサイズ</div>
+      <div class="slider-wrap">
+        <label id="scaleLabel">100%</label>
+        <input type="range" id="scaleSlider" min="30" max="250" step="5" value="100">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Popup: Display Mode -->
+<div class="toolbar-popup" id="popupMode" data-parent="btnTbMode" style="min-width:250px;">
+  <div class="popup-title">表示モード</div>
+  <div class="popup-body">
+    <div class="popup-row" style="margin-bottom:10px;flex-direction:column;gap:6px;">
+      <button class="btn active" id="btnModeOriginal" style="width:100%;">テクスチャ</button>
+      <button class="btn" id="btnModeSolid" style="width:100%;">単色</button>
+      <button class="btn" id="btnModeHolo" style="width:100%;">ホログラム</button>
+    </div>
+    <div class="popup-sub" id="colorSection">
+      <div class="popup-sub-label">カラー</div>
+      <div class="color-presets" id="colorPresets">
+        <div class="color-dot active" style="background:#00e5ff" data-color="#00e5ff"></div>
+        <div class="color-dot" style="background:#ff3d80" data-color="#ff3d80"></div>
+        <div class="color-dot" style="background:#39ff14" data-color="#39ff14"></div>
+        <div class="color-dot" style="background:#ffaa00" data-color="#ffaa00"></div>
+        <div class="color-dot" style="background:#bf00ff" data-color="#bf00ff"></div>
+        <div class="color-dot" style="background:#ffffff" data-color="#ffffff"></div>
+        <div class="color-dot" style="background:linear-gradient(45deg,#00e5ff,#ff3d80);" id="customColorDot">
+          <input type="color" id="colorPicker" value="#00e5ff">
+        </div>
+      </div>
+    </div>
+    <div class="popup-sub" id="holoSliders">
+      <div class="popup-sub-label">ホログラム設定</div>
+      <div class="slider-wrap" style="margin-bottom:8px;">
+        <label>輝度</label>
+        <input type="range" id="glowSlider" min="0.3" max="2.5" step="0.05" value="1.0">
+      </div>
+      <div class="slider-wrap" style="margin-bottom:8px;">
+        <label>速度</label>
+        <input type="range" id="speedSlider" min="0.2" max="3" step="0.1" value="1.2">
+      </div>
+      <div class="slider-wrap" style="margin-bottom:8px;">
+        <label>スキャン</label>
+        <input type="range" id="scanSlider" min="0" max="1" step="0.05" value="0.6">
+      </div>
+      <div class="slider-wrap">
+        <label>メラメラ</label>
+        <input type="range" id="noiseSlider" min="0" max="1" step="0.05" value="0.35">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Popup: Explode -->
+<div class="toolbar-popup" id="popupExplode" data-parent="btnTbExplode">
+  <div class="popup-title">分解表示</div>
+  <div class="popup-body">
+    <button class="btn" id="btnExplode" style="width:100%;margin-bottom:10px;">分解表示 OFF</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">パーツ数 <span class="val" id="partVal2" style="color:var(--accent);font-family:Orbitron,monospace">1</span></div>
+    <div class="slider-wrap" id="explodeSliderRow" style="opacity:0.4;pointer-events:none;">
+      <label>分解量</label>
+      <input type="range" id="explodeSlider" min="0" max="1" step="0.05" value="0.5">
+    </div>
+    <div class="popup-sub show" id="patternSection">
+      <div class="popup-sub-label">分解パターン</div>
+      <div class="seg-row" id="patternGroup">
+        <button class="seg-btn active" data-pattern="radial">放射状</button>
+        <button class="seg-btn" data-pattern="axisY">上下</button>
+        <button class="seg-btn" data-pattern="axisX">左右</button>
+        <button class="seg-btn" data-pattern="axisZ">前後</button>
+        <button class="seg-btn" data-pattern="circle">円形</button>
+        <button class="seg-btn" data-pattern="grid">グリッド</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Popup: Rotate -->
+<div class="toolbar-popup compact" id="popupRotate" data-parent="btnTbRotate">
+  <div class="popup-title">回転速度</div>
+  <div class="popup-body">
+    <div class="seg-row" id="speedGroup">
+      <button class="seg-btn active" data-rot="2">低速</button>
+      <button class="seg-btn" data-rot="4.5">普通</button>
+      <button class="seg-btn" data-rot="9">高速</button>
+    </div>
+<!-- Popup: Orientation -->
+<div class="toolbar-popup" id="popupOrient" data-parent="btnTbOrient">
+  <div class="popup-title">向き補正</div>
+  <div class="popup-body">
+    <button class="btn" id="btnAutoOrient" style="width:100%;margin-bottom:10px;">自動正立</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">座標系切り替え</div>
+    <div class="popup-row" style="gap:8px;margin-bottom:10px;">
+      <button class="btn" id="btnYup" style="flex:1;font-size:12px;">Y-up</button>
+      <button class="btn" id="btnZup" style="flex:1;font-size:12px;">Z-up</button>
+    </div>
+    <button class="btn" id="btnResetOrient" style="width:100%;">向きリセット</button>
+  </div>
+</div>
+    <div id="rotHint" style="font-size:11px;color:var(--muted);margin-top:8px;">ボタンを押すと回転します</div>
+  </div>
+</div>
+
+<!-- Popup: Record -->
+<div class="toolbar-popup" id="popupRecord" data-parent="btnTbRecord">
+  <div class="popup-title">録画</div>
+  <div class="popup-body">
+    <button class="btn" id="btnRecord" style="width:100%;margin-bottom:8px;">録画開始</button>
+    <div style="font-size:11px;color:var(--muted);">1回転ぶんをループ動画として保存します</div>
+  </div>
+</div>
+
+<!-- Popup: Slideshow -->
+<div class="toolbar-popup" id="popupSlide" data-parent="btnTbSlide" style="min-width:260px;">
+  <div class="popup-title">スライドショー</div>
+  <div class="popup-body">
+    <label class="btn" id="folderPickBtn" style="width:100%;margin-bottom:10px;">
+      <svg class="btn-svg" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.8 2.2H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>
+      <span id="folderPickLabel">フォルダを選択</span>
+      <input type="file" id="folderInput" webkitdirectory directory multiple>
+    </label>
+    <div class="popup-sub-label">切替時間</div>
+    <div class="seg-row" id="slideInterval" style="margin-bottom:12px;">
+      <button class="seg-btn" data-sec="30">30秒</button>
+      <button class="seg-btn active" data-sec="60">1分</button>
+      <button class="seg-btn" data-sec="180">3分</button>
+      <button class="seg-btn" data-sec="300">5分</button>
+    </div>
+    <button class="btn" id="btnSlideToggle" style="width:100%;margin-bottom:8px;">開始</button>
+    <div class="slide-status" id="slideStatus">フォルダを選択してください</div>
+    <button class="btn" id="btnSlideClear" style="display:none;width:100%;margin-top:8px;font-size:11px;color:#ff6d9c;border-color:rgba(255,61,128,0.3);background:transparent;">フォルダの記憶を解除</button>
+  </div>
+</div>
+
+<div class="popup-overlay" id="popupOverlay"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+const PANEL_W_DESKTOP = 320;
+const HEADER_H = 56;
+const MAX_PARTS = 120;
+const UI_IDLE_MS = 4500;
+const UP = new THREE.Vector3(0, 1, 0);
+
+const state = {
+  currentColor: new THREE.Color('#00e5ff'),
+  glowIntensity: 1.0,
+  scanSpeed: 1.2,
+  scanIntensity: 0.6,
+  noiseIntensity: 0.35,
+  autoRotate: false,
+  rotateSpeed: 2,
+  model: null,
+  orientationGroup: null,
+  originalOrientation: null,
+  mode: 'original',
+  fileName: 'デモモデル',
+  normScale: 1,
+  modelScale: 1,
+  slideshow: { files: [], index: -1, interval: 60000, running: false, timer: 0, watchdog: 0, folder: '', loading: false },
+  pendingOnDone: null,
+  isMobile: window.innerWidth < 768,
+  hologramMaterial: null,
+  outlineMaterial: null,
+  outlineMeshes: [],
+  solidMaterial: null,
+  parts: [],
+  partCount: 1,
+  explodeOn: false,
+  explodeAmount: 0.5,
+  explodePattern: 'radial',
+  baseCenter: null,
+  baseRadius: 1,
+  fitDist: 0,
+  camTargetDist: null,
+  gridVisible: true,
+  bgColor: '#06080e',
+};
+
+const PREF_KEY = 'holoforge_viewer_prefs_v1';
+function savePreferences() {
+  try {
+    const prefs = {
+      gridVisible: state.gridVisible,
+      bgColor: state.bgColor,
+      currentColor: '#' + state.currentColor.getHexString(),
+      mode: state.mode,
+      rotateSpeed: state.rotateSpeed,
+      slideInterval: state.slideshow.interval,
+      modelScale: state.modelScale,
+    };
+    localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
+  } catch (e) {}
+}
+
+function loadPreferences() {
+  try {
+    const raw = localStorage.getItem(PREF_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if (typeof p.gridVisible === 'boolean') state.gridVisible = p.gridVisible;
+    if (p.bgColor) state.bgColor = p.bgColor;
+    if (p.currentColor) state.currentColor.set(p.currentColor);
+    if (p.mode) state.mode = p.mode;
+    if (p.rotateSpeed) state.rotateSpeed = p.rotateSpeed;
+    if (p.slideInterval) state.slideshow.interval = p.slideInterval;
+    if (p.modelScale) state.modelScale = p.modelScale;
+  } catch (e) {}
+}
+loadPreferences();
+
+const DB_NAME = 'HoloForgeSlideshowDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'cached_models';
+
+function openSlideshowDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveSlideshowToDB(folderName, files) {
+  try {
+    const db = await openSlideshowDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const buf = await f.arrayBuffer();
+      store.add({
+        name: f.name,
+        type: f.type || 'application/octet-stream',
+        data: buf,
+        relativePath: f.webkitRelativePath || f.name,
+      });
+    }
+    localStorage.setItem('holoforge_slide_folder', folderName);
+    localStorage.setItem('holoforge_slide_count', String(files.length));
+  } catch (err) {
+    console.warn('Slideshow DB save error:', err);
+  }
+}
+
+async function loadSlideshowFromDB() {
+  try {
+    const folderName = localStorage.getItem('holoforge_slide_folder');
+    if (!folderName) return null;
+    const db = await openSlideshowDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        const records = req.result || [];
+        if (!records.length) { resolve(null); return; }
+        const files = records.map(r => new File([r.data], r.name, { type: r.type }));
+        resolve({ folderName, files });
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn('Slideshow DB load error:', err);
+    return null;
+  }
+}
+
+async function clearSlideshowDB() {
+  try {
+    const db = await openSlideshowDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+  } catch (e) {}
+  localStorage.removeItem('holoforge_slide_folder');
+  localStorage.removeItem('holoforge_slide_count');
+}
+
+const originalMaterials = new Map();
+
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(state.bgColor);
+
+function setBackground(color) {
+  state.bgColor = color;
+  scene.background = new THREE.Color(color);
+  document.body.style.background = color;
+  document.documentElement.style.setProperty('--bg', color);
+  savePreferences();
+}
+
+function toggleGrid() {
+  state.gridVisible = !state.gridVisible;
+  gridHelper.visible = state.gridVisible;
+  const btn = document.getElementById('btnGrid');
+  if (btn) {
+    btn.classList.toggle('active', state.gridVisible);
+    btn.textContent = state.gridVisible ? 'グリッド ON' : 'グリッド OFF';
+  }
+  savePreferences();
+}
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
+camera.position.set(0, 8, 28);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.autoRotateSpeed = state.rotateSpeed;
+if (state.isMobile) { controls.rotateSpeed = 0.7; controls.zoomSpeed = 0.8; }
+controls.addEventListener('start', () => { state.camTargetDist = null; });
+
+const gridHelper = new THREE.GridHelper(60, 60, 0x1a2340, 0x0f1525);
+scene.add(gridHelper);
+
+scene.add(new THREE.HemisphereLight(0x9fb8dd, 0x1a2130, 0.9));
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
+keyLight.position.set(12, 22, 14);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x99bbff, 0.7);
+fillLight.position.set(-14, 8, -6);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xff88bb, 0.5);
+rimLight.position.set(-4, 6, -18);
+scene.add(rimLight);
+
+const gltfLoader = new GLTFLoader();
+const threeMFLoader = new ThreeMFLoader();
+const plyLoader = new PLYLoader();
+const fbxLoader = new FBXLoader();
+const colladaLoader = new ColladaLoader();
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+gltfLoader.setDRACOLoader(dracoLoader);
+gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+const holoVertexShader = `
+  varying vec3 vWorldPos;
+  varying vec3 vNormal;
+  varying float vWorldY;
+  void main() {
+    vNormal = normalize(mat3(modelMatrix) * normal);
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPosition.xyz;
+    vWorldY = worldPosition.y;
+    gl_Position = projectionMatrix * viewMatrix * worldPosition;
+  }
+`;
+
+const holoFragmentShader = `
+  uniform float uTime;
+  uniform vec3 uColor;
+  uniform float uGlow;
+  uniform float uScanIntensity;
+  uniform float uNoiseIntensity;
+  uniform float uScanSpeed;
+  uniform float uBoundsYMin;
+  uniform float uBoundsYMax;
+  varying vec3 vWorldPos;
+  varying vec3 vNormal;
+  varying float vWorldY;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+  }
+  float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.2; a *= 0.5; } return v; }
+
+  void main() {
+    vec3 N = normalize(vNormal);
+    vec3 V = normalize(cameraPosition - vWorldPos);
+    float heightRange = max(uBoundsYMax - uBoundsYMin, 0.001);
+    float normalizedY = clamp((vWorldY - uBoundsYMin) / heightRange, 0.0, 1.0);
+
+    float diff = clamp(dot(N, normalize(vec3(0.45, 0.8, 0.35))), 0.0, 1.0);
+    float shade = 0.35 + 0.65 * diff;
+    float fresnel = pow(1.0 - clamp(dot(V, N), 0.0, 1.0), 2.2);
+
+    float scanPos = fract(uTime * uScanSpeed * 0.3);
+    float wave = normalizedY - scanPos;
+    wave += sin(vWorldPos.x * 2.0 + uTime) * 0.08 + sin(vWorldPos.z * 3.0 + uTime * 1.3) * 0.06;
+    float scanLine = exp(-wave * wave * 80.0);
+    float scanPos2 = fract(uTime * uScanSpeed * 0.17 + 0.5);
+    float wave2 = normalizedY - scanPos2;
+    float scanLine2 = exp(-wave2 * wave2 * 60.0) * 0.5;
+
+    float fireNoise = fbm(vec2(vWorldPos.x * 3.0, vWorldPos.y * 2.0 - uTime * 1.5));
+    float fireMask = smoothstep(0.35, 0.75, fireNoise) * (0.35 + 0.65 * normalizedY);
+    float fire = pow(fireMask, 2.0) * uNoiseIntensity;
+    float glitch = step(0.94, noise(vec2(floor(normalizedY * 30.0), floor(uTime * 8.0)))) * 0.25;
+
+    vec3 col = uColor * shade * 0.85;
+    col += uColor * scanLine * 1.1 * uScanIntensity;
+    col += uColor * scanLine2 * 0.5 * uScanIntensity;
+    col += uColor * fire * 0.9;
+    col += uColor * glitch;
+    col += uColor * fresnel * 0.9;
+    col *= uGlow;
+    col = min(col, vec3(1.7));
+
+    float alpha = 0.32 + 0.42 * fresnel + scanLine * 0.45 * uScanIntensity + fire * 0.35 + glitch * 0.4;
+    alpha = clamp(alpha * (0.6 + 0.4 * uGlow), 0.0, 0.92);
+
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
+const outlineVertexShader = `
+  uniform float uThickness;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vec4 clip = projectionMatrix * mv;
+    vec3 vn = normalize(normalMatrix * normal);
+    clip.xy += vn.xy * uThickness * clip.w;
+    gl_Position = clip;
+  }
+`;
+const outlineFragmentShader = `
+  uniform vec3 uColor;
+  void main() { gl_FragColor = vec4(min(uColor * 1.5, vec3(1.6)), 0.95); }
+`;
+
+const stlLoader = new STLLoader();
+const objLoader = new OBJLoader();
+
+function showToast(msg, ms) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms || 2500);
+}
+
+function isOutline(o) { return o && o.name === 'holoOutline'; }
+
+function setFileName(name, isDemo) {
+  state.fileName = name;
+  const el = document.getElementById('fileNameVal');
+  el.textContent = name;
+  el.title = name;
+  el.classList.toggle('demo', !!isDemo);
+}
+
+function ensureNormals(root) {
+  const done = new Set();
+  root.traverse((child) => {
+    if (!child.isMesh || !child.geometry) return;
+    const geo = child.geometry;
+    if (done.has(geo.uuid)) return;
+    done.add(geo.uuid);
+    const pos = geo.attributes.position;
+    if (!pos) return;
+    const n = geo.attributes.normal;
+    let needs = false;
+    if (!n || n.count !== pos.count) needs = true;
+    else {
+      const a = n.array;
+      if (Math.abs(a[0]) + Math.abs(a[1]) + Math.abs(a[2]) < 1e-8) needs = true;
+    }
+    if (needs) geo.computeVertexNormals();
+  });
+}
+
+function flattenToGroup(source) {
+  source.updateMatrixWorld(true);
+  const rootInv = new THREE.Matrix4().copy(source.matrixWorld).invert();
+  const group = new THREE.Group();
+  const meshes = [];
+  source.traverse((c) => { if (c.isMesh && !isOutline(c)) meshes.push(c); });
+
+  meshes.forEach((m) => {
+    const rel = new THREE.Matrix4().multiplyMatrices(rootInv, m.matrixWorld);
+    let mat = m.material;
+    if (Array.isArray(m.material)) {
+      mat = m.material.map(mm => mm.clone());
+    } else if (m.material) {
+      mat = m.material.clone();
+    }
+    const clone = new THREE.Mesh(m.geometry, mat);
+    rel.decompose(clone.position, clone.quaternion, clone.scale);
+    clone.name = 'part';
+    group.add(clone);
+  });
+  return group;
+}
+
+function readComp(src, vi, c) {
+  if (src.isInterleavedBufferAttribute) {
+    if (c === 0) return src.getX(vi);
+    if (c === 1) return src.getY(vi);
+    if (c === 2) return src.getZ(vi);
+    return 0;
+  }
+  return src.array[vi * src.itemSize + c];
+}
+
+function splitGeometryIslands(geometry) {
+  let g = geometry;
+  const triRaw = geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
+
+  if (!g.index) {
+    if (triRaw > 300000) return null;
+    try { g = BufferGeometryUtils.mergeVertices(g, 1e-4); } catch (e) { return null; }
+  }
+  if (!g.index) return null;
+
+  const pos = g.attributes.position;
+  const idx = g.index.array;
+  const n = pos.count;
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+
+  function find(x) {
+    let r = x;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[x] !== r) { const nx = parent[x]; parent[x] = r; x = nx; }
+    return r;
+  }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; }
+
+  for (let i = 0; i < idx.length; i += 3) {
+    union(idx[i], idx[i + 1]);
+    union(idx[i + 1], idx[i + 2]);
+  }
+
+  const groups = new Map();
+  for (let t = 0; t < idx.length; t += 3) {
+    const r = find(idx[t]);
+    let arr = groups.get(r);
+    if (!arr) { arr = []; groups.set(r, arr); }
+    arr.push(t);
+  }
+  if (groups.size < 2) return null;
+
+  const keys = Object.keys(g.attributes).filter(k => k === 'position' || k === 'normal' || k === 'uv');
+  const list = [];
+  groups.forEach((tris) => {
+    const count = tris.length * 3;
+    const out = new THREE.BufferGeometry();
+    keys.forEach((key) => {
+      const src = g.attributes[key];
+      const itemSize = src.itemSize;
+      const arr = new Float32Array(count * itemSize);
+      let o = 0;
+      for (let i = 0; i < tris.length; i++) {
+        const t = tris[i];
+        for (let k = 0; k < 3; k++) {
+          const vi = idx[t + k];
+          for (let c = 0; c < itemSize; c++) arr[o++] = readComp(src, vi, c);
+        }
+      }
+      out.setAttribute(key, new THREE.BufferAttribute(arr, itemSize));
+    });
+    out.computeBoundingBox();
+    out.computeBoundingSphere();
+    list.push({ geo: out, tris: tris.length });
+  });
+
+  list.sort((a, b) => b.tris - a.tris);
+  return list;
+}
+
+function worldVecToLocal(vec, object3D) {
+  object3D.updateWorldMatrix(true, false);
+  const e = new THREE.Matrix4().copy(object3D.matrixWorld).invert().elements;
+  return new THREE.Vector3(
+    e[0] * vec.x + e[4] * vec.y + e[8] * vec.z,
+    e[1] * vec.x + e[5] * vec.y + e[9] * vec.z,
+    e[2] * vec.x + e[6] * vec.y + e[10] * vec.z
+  );
+}
+
+function registerParts() {
+  state.parts = [];
+  const model = state.model;
+  if (!model) return;
+  model.updateMatrixWorld(true);
+
+  const meshes = [];
+  model.traverse((c) => { if (c.isMesh && !isOutline(c)) meshes.push(c); });
+  if (!meshes.length) return;
+
+  const box = new THREE.Box3().setFromObject(model);
+  state.baseCenter = box.getCenter(new THREE.Vector3());
+  state.baseRadius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1e-4);
+
+  let maxTris = 1;
+  meshes.forEach((m) => {
+    const g = m.geometry;
+    m.userData.tris = g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
+    maxTris = Math.max(maxTris, m.userData.tris);
+  });
+
+  meshes.forEach((m, i) => {
+    m.userData.rank = i;
+    m.userData.basePos = m.position.clone();
+    const pc = new THREE.Box3().setFromObject(m).getCenter(new THREE.Vector3());
+    let dir = pc.clone().sub(state.baseCenter);
+    if (dir.lengthSq() < 1e-10) dir.set(0, 1, 0);
+    dir.normalize();
+    m.userData.worldDir = dir;
+    m.userData.sizeRatio = Math.sqrt((m.userData.tris || 1) / maxTris);
+
+    const g = m.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const e = m.matrixWorld.elements;
+    const ws = Math.max(
+      Math.hypot(e[0], e[1], e[2]),
+      Math.hypot(e[4], e[5], e[6]),
+      Math.hypot(e[8], e[9], e[10])
+    );
+    m.userData.restCenter = g.boundingSphere.center.clone().applyMatrix4(m.matrixWorld);
+    m.userData.restRadius = Math.max(g.boundingSphere.radius * ws, 1e-4);
+    state.parts.push(m);
+  });
+
+  const byCenter = new Map();
+  state.parts.forEach((m) => {
+    const c = m.userData.restCenter;
+    if (!c) return;
+    const key = Math.round(c.x * 8) + '_' + Math.round(c.y * 8) + '_' + Math.round(c.z * 8);
+    if (!byCenter.has(key)) byCenter.set(key, []);
+    byCenter.get(key).push(m);
+  });
+  byCenter.forEach((list) => {
+    if (list.length < 2) return;
+    list.forEach((m, k) => {
+      const d = (m.userData.worldDir || UP).clone().normalize();
+      const axis = Math.abs(d.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+      d.applyAxisAngle(axis, (k / list.length) * Math.PI * 2);
+      if (d.lengthSq() < 1e-8) d.set(0, 1, 0);
+      m.userData.worldDir = d.normalize();
+    });
+  });
+
+  state.partCount = state.parts.length;
+  setPartCount(state.partCount);
+}
+
+function setPartCount(n) {
+  document.getElementById('partVal').textContent = n;
+  document.getElementById('partVal2').textContent = n;
+}
+
+function explodeDirWorld(p, pattern) {
+  const ud = p.userData || {};
+  const n = Math.max(state.parts.length, 1);
+  const idx = ud.rank || 0;
+  const radial = (ud.worldDir || UP).clone().normalize();
+  switch (pattern) {
+    case 'axisY': return new THREE.Vector3(0, (idx % 2 === 0) ? 1 : -1, 0);
+    case 'axisX': return new THREE.Vector3((idx % 2 === 0) ? 1 : -1, 0, 0);
+    case 'axisZ': return new THREE.Vector3(0, 0, (idx % 2 === 0) ? 1 : -1);
+    case 'circle': {
+      const a = (idx / n) * Math.PI * 2 + Math.PI / 2;
+      return new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    }
+    case 'grid': {
+      const cols = Math.max(Math.ceil(Math.sqrt(n)), 1);
+      const rows = Math.max(Math.ceil(n / cols), 1);
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const v = new THREE.Vector3(col - (cols - 1) / 2, (rows - 1) / 2 - row, 0);
+      if (v.lengthSq() < 1e-8) v.set(0, 1, 0);
+      return v.normalize();
+    }
+    default: return radial;
+  }
+}
+
+function explodeOffsetWorld(p, amount) {
+  const r = state.baseRadius;
+  const ratio = p.userData.sizeRatio || 0.3;
+  const pattern = state.explodePattern || 'radial';
+  const dir = explodeDirWorld(p, pattern);
+  const radial = (pattern === 'radial');
+  let d = r * amount * (radial ? (0.45 + 0.75 * ratio) : (0.8 + 0.7 * ratio));
+  d = Math.min(d, r * (radial ? 1.05 : 1.8));
+  return dir.clone().multiplyScalar(d);
+}
+
+function mergeSphere(a, b) {
+  const d = b.center.distanceTo(a.center);
+  if (d + b.radius <= a.radius) return a.clone();
+  if (d + a.radius <= b.radius) return b.clone();
+  const r = (a.radius + b.radius + d) / 2;
+  const t = (r - a.radius) / d;
+  return new THREE.Sphere(a.center.clone().lerp(b.center, t), r);
+}
+
+function extentFor(amount) {
+  let s = null;
+  state.parts.forEach((p) => {
+    const ud = p.userData;
+    if (!ud.restCenter) return;
+    const c = ud.restCenter.clone().add(explodeOffsetWorld(p, amount));
+    const cur = new THREE.Sphere(c, ud.restRadius);
+    s = s ? mergeSphere(s, cur) : cur;
+  });
+  if (!s) {
+    if (!state.model) return new THREE.Sphere(new THREE.Vector3(0, 7, 0), 8);
+    return new THREE.Box3().setFromObject(state.model).getBoundingSphere(new THREE.Sphere());
+  }
+  return s;
+}
+
+function updateExplodeTargets() {
+  state.parts.forEach((p) => {
+    const ud = p.userData;
+    if (!ud.basePos) ud.basePos = p.position.clone();
+    const off = state.explodeOn ? explodeOffsetWorld(p, state.explodeAmount) : new THREE.Vector3();
+    const local = worldVecToLocal(off, p.parent);
+    ud.targetPos = ud.basePos.clone().add(local);
+  });
+}
+
+function fitDistanceForRadius(radius) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const tanV = Math.tan((camera.fov * Math.PI / 180) / 2);
+  const tanH = tanV * (W / H);
+  return Math.max(radius / tanV, radius / tanH) * 1.14;
+}
+
+function layoutViewOffset() {
+  if (camera.clearViewOffset) camera.clearViewOffset();
+}
+
+function smoothCamTo(dist) {
+  state.camTargetDist = Math.max(dist, 0.01);
+}
+
+function currentAmount() { return state.explodeOn ? state.explodeAmount : 0; }
+
+function refitView(opts) {
+  const o = opts || {};
+  layoutViewOffset();
+  if (!state.model) return;
+  const s = extentFor(currentAmount());
+  const need = fitDistanceForRadius(s.radius);
+  state.camTargetDist = null;
+  if (o.recenter) controls.target.copy(s.center);
+  const dir = new THREE.Vector3(0, 0.35, 1).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, need);
+  state.fitDist = need;
+  controls.update();
+}
+
+function setExplode(on, silent) {
+  state.explodeOn = on;
+  const eb = document.getElementById('btnExplode');
+  eb.classList.toggle('active', on);
+  eb.textContent = on ? '分解表示 ON' : '分解表示 OFF';
+  updateExplodeTargets();
+  const row = document.getElementById('explodeSliderRow');
+  row.style.opacity = on ? '1' : '0.4';
+  row.style.pointerEvents = on ? 'auto' : 'none';
+  smoothCamTo(fitDistanceForRadius(extentFor(on ? 1 : 0).radius));
+  if (!silent) showToast(on ? '分解表示 ON' : '分解表示 OFF');
+}
+
+function computeWorldVolume(root) {
+  let vol = 0;
+  const m = new THREE.Matrix4();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  root.updateMatrixWorld(true);
+  root.traverse((child) => {
+    if (!child.isMesh || !child.geometry || isOutline(child)) return;
+    m.copy(child.matrixWorld);
+    const geo = child.geometry;
+    const pos = geo.attributes.position;
+    if (!pos) return;
+    const idx = geo.index ? geo.index.array : null;
+    const count = idx ? idx.length : pos.count;
+    for (let i = 0; i < count; i += 3) {
+      const i0 = idx ? idx[i] : i, i1 = idx ? idx[i+1] : i+1, i2 = idx ? idx[i+2] : i+2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(m);
+      b.fromBufferAttribute(pos, i1).applyMatrix4(m);
+      c.fromBufferAttribute(pos, i2).applyMatrix4(m);
+      vol += a.dot(b.clone().cross(c)) / 6;
+    }
+  });
+  return Math.abs(vol);
+}
+
+function fmt(v) { return v.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+
+function updateInfo(root) {
+  const s = (state.normScale || 1) * (state.modelScale || 1);
+  const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).divideScalar(s);
+  document.getElementById('dimX').textContent = fmt(size.x);
+  document.getElementById('dimY').textContent = fmt(size.y);
+  document.getElementById('dimZ').textContent = fmt(size.z);
+
+  const vol = computeWorldVolume(root) / (s * s * s);
+  document.getElementById('volVal').textContent = vol > 0.0001 ? fmt(vol) : '—';
+
+  let verts = 0, faces = 0;
+  root.traverse((child) => {
+    if (child.isMesh && child.geometry && !isOutline(child)) {
+      const p = child.geometry.attributes.position;
+      if (p) verts += p.count;
+      faces += child.geometry.index ? child.geometry.index.count / 3 : (p ? p.count / 3 : 0);
+    }
+  });
+  document.getElementById('vertVal').textContent = verts.toLocaleString();
+  document.getElementById('faceVal').textContent = Math.floor(faces).toLocaleString();
+}
+
+function saveOriginalMaterials(root) {
+  originalMaterials.clear();
+  root.traverse((child) => {
+    if (child.isMesh && child.material && !isOutline(child)) {
+      originalMaterials.set(child.uuid, Array.isArray(child.material) ? child.material.map(mm => mm.clone()) : child.material.clone());
+    }
+  });
+}
+
+function restoreOriginalMaterials(root) {
+  root.traverse((child) => {
+    if (child.isMesh && !isOutline(child) && originalMaterials.has(child.uuid)) child.material = originalMaterials.get(child.uuid);
+  });
+}
+
+function removeHologram() {
+  if (state.outlineMeshes.length) {
+    state.outlineMeshes.forEach((om) => { if (om.parent) om.parent.remove(om); });
+    state.outlineMeshes = [];
+  }
+  if (state.hologramMaterial) { state.hologramMaterial.dispose(); state.hologramMaterial = null; }
+  if (state.outlineMaterial) { state.outlineMaterial.dispose(); state.outlineMaterial = null; }
+}
+
+function applySolidMaterial(root) {
+  if (!state.solidMaterial) {
+    state.solidMaterial = new THREE.MeshStandardMaterial({ color: state.currentColor.clone(), roughness: 0.55, metalness: 0.05 });
+  }
+  state.solidMaterial.color.copy(state.currentColor);
+  root.traverse((child) => { if (child.isMesh && !isOutline(child)) child.material = state.solidMaterial; });
+}
+
+function applyHologram(root) {
+  removeHologram();
+  const box = new THREE.Box3().setFromObject(root);
+  state.hologramMaterial = new THREE.ShaderMaterial({
+    vertexShader: holoVertexShader,
+    fragmentShader: holoFragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: state.currentColor.clone() },
+      uGlow: { value: state.glowIntensity },
+      uScanIntensity: { value: state.scanIntensity },
+      uNoiseIntensity: { value: state.noiseIntensity },
+      uScanSpeed: { value: state.scanSpeed },
+      uBoundsYMin: { value: box.min.y },
+      uBoundsYMax: { value: box.max.y },
+    },
+    transparent: true,
+    depthWrite: true,
+    side: THREE.FrontSide,
+  });
+  state.hologramMaterial.renderOrder = 1;
+
+  state.outlineMaterial = new THREE.ShaderMaterial({
+    vertexShader: outlineVertexShader,
+    fragmentShader: outlineFragmentShader,
+    uniforms: {
+      uColor: { value: state.currentColor.clone() },
+      uThickness: { value: 0.006 },
+    },
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+  });
+  state.outlineMaterial.renderOrder = 2;
+
+  state.parts.forEach((mesh) => {
+    mesh.material = state.hologramMaterial;
+    const om = new THREE.Mesh(mesh.geometry, state.outlineMaterial);
+    om.name = 'holoOutline';
+    om.renderOrder = 2;
+    mesh.add(om);
+    state.outlineMeshes.push(om);
+  });
+}
+
+function applyCurrentColor() {
+  if (state.mode === 'solid' && state.solidMaterial) state.solidMaterial.color.copy(state.currentColor);
+  else if (state.mode === 'holo') {
+    if (state.hologramMaterial) state.hologramMaterial.uniforms.uColor.value.copy(state.currentColor);
+    if (state.outlineMaterial) state.outlineMaterial.uniforms.uColor.value.copy(state.currentColor);
+  }
+}
+
+function refreshHologramUniforms() {
+  if (state.mode !== 'holo' || !state.hologramMaterial) return;
+  const u = state.hologramMaterial.uniforms;
+  u.uGlow.value = state.glowIntensity;
+  u.uScanIntensity.value = state.scanIntensity;
+  u.uNoiseIntensity.value = state.noiseIntensity;
+  u.uScanSpeed.value = state.scanSpeed;
+}
+
+function setMode(mode) {
+  if (!state.model) return;
+  state.mode = mode;
+  document.getElementById('btnModeOriginal').classList.toggle('active', mode === 'original');
+  document.getElementById('btnModeSolid').classList.toggle('active', mode === 'solid');
+  document.getElementById('btnModeHolo').classList.toggle('active', mode === 'holo');
+
+  const cs = document.getElementById('colorSection');
+  const hs = document.getElementById('holoSliders');
+  if (cs) cs.classList.toggle('show', mode === 'solid');
+  if (hs) hs.classList.toggle('show', mode === 'holo');
+
+  if (mode === 'original') { removeHologram(); restoreOriginalMaterials(state.model); }
+  else if (mode === 'solid') { removeHologram(); applySolidMaterial(state.model); }
+  else { applyHologram(state.model); }
+}
+
+function applyModelScale(pct) {
+  state.modelScale = Math.max(0.05, (pct || 100) / 100);
+  const lbl = document.getElementById('scaleLabel');
+  if (lbl) lbl.textContent = Math.round(pct) + '%';
+  if (!state.model) return;
+  state.parts.forEach((p) => { if (p.userData && p.userData.basePos) p.position.copy(p.userData.basePos); });
+  state.model.scale.setScalar(state.normScale * state.modelScale);
+  state.model.updateMatrixWorld(true);
+  registerParts();
+  updateExplodeTargets();
+}
+
+function resetModelScale() {
+  state.modelScale = 1;
+  const sl = document.getElementById('scaleSlider');
+  const lbl = document.getElementById('scaleLabel');
+  if (sl) sl.value = '100';
+  if (lbl) lbl.textContent = '100%';
+}
+
+function placeAndFit(root) {
+  root.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const s = maxDim > 0.0001 ? 15 / maxDim : 1;
+  state.normScale = s;
+  root.scale.setScalar(s);
+  root.updateMatrixWorld(true);
+
+  box = new THREE.Box3().setFromObject(root);
+  const center = box.getCenter(new THREE.Vector3());
+  root.position.x -= center.x;
+  root.position.z -= center.z;
+  root.position.y -= box.min.y;
+  root.updateMatrixWorld(true);
+
+  layoutViewOffset();
+}
+
+
+function autoOrient() {
+  if (!state.model || !state.orientationGroup) return;
+  const box = new THREE.Box3().setFromObject(state.model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim < 0.0001) return;
+
+  // 最も大きい面を底面にする回転を計算
+  const dx = size.x, dy = size.y, dz = size.z;
+  let q = new THREE.Quaternion();
+
+  if (dy >= dx && dy >= dz) {
+    // Yが最も大きい → すでに正立に近い
+    q.set(0, 0, 0, 1);
+  } else if (dz >= dx && dz >= dy) {
+    // Zが最も大きい → ZをYに回転
+    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  } else {
+    // Xが最も大きい → XをYに回転
+    q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  }
+
+  state.orientationGroup.quaternion.copy(q);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('自動正立を適用しました', 1800);
+}
+
+function setYup() {
+  if (!state.orientationGroup) return;
+  state.orientationGroup.quaternion.set(0, 0, 0, 1);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('Y-up に設定しました', 1800);
+}
+
+function setZup() {
+  if (!state.orientationGroup) return;
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  state.orientationGroup.quaternion.copy(q);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('Z-up に設定しました', 1800);
+}
+
+function resetOrientation() {
+  if (!state.orientationGroup) return;
+  state.orientationGroup.quaternion.set(0, 0, 0, 1);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('向きをリセットしました', 1800);
+}
+
+function finalizeFit() {
+  const s0 = extentFor(0);
+  const d0 = fitDistanceForRadius(s0.radius);
+  state.fitDist = d0;
+  state.camTargetDist = null;
+  controls.target.copy(s0.center);
+  const dir = new THREE.Vector3(0, 0.35, 1).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, d0);
+  controls.update();
+}
+
+function disposeModel() {
+  if (rec.active) stopRecording(false);
+  if (!state.model) return;
+  removeHologram();
+  if (state.orientationGroup) state.orientationGroup.remove(state.model);
+  else scene.remove(state.model);
+  const seen = new Set();
+  state.model.traverse((c) => {
+    if (c.geometry && !seen.has(c.geometry.uuid)) { seen.add(c.geometry.uuid); c.geometry.dispose(); }
+  });
+  state.model = null;
+  state.parts = [];
+}
+
+function addModelToScene(sourceObject) {
+  disposeModel();
+  const group = flattenToGroup(sourceObject);
+  state.model = group;
+  if (state.orientationGroup) state.orientationGroup.add(group);
+  else scene.add(group);
+  ensureNormals(group);
+  saveOriginalMaterials(group);
+  resetModelScale();
+  placeAndFit(group);
+  registerParts();
+  finalizeFit();
+  state.explodeOn = false;
+  document.getElementById('btnExplode').classList.remove('active');
+  state.explodePattern = 'radial';
+  document.querySelectorAll('#patternGroup .seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.pattern === 'radial');
+  });
+  updateExplodeTargets();
+  const row = document.getElementById('explodeSliderRow');
+  row.style.opacity = '0.4';
+  row.style.pointerEvents = 'none';
+  updateExplodeButtonState();
+  updateInfo(group);
+  setMode('original');
+}
+
+function updateExplodeButtonState() {
+  const btn = document.getElementById('btnExplode');
+  const single = state.parts.length === 1;
+  const g = single ? state.parts[0].geometry : null;
+  const tris = g ? (g.index ? g.index.count / 3 : g.attributes.position.count / 3) : 0;
+  let possible = true;
+  if (single) {
+    if (!g.index && tris > 300000) possible = false;
+    else if (tris > 3000000) possible = false;
+  }
+  btn.disabled = !possible;
+  btn.classList.toggle('disabled', !possible);
+}
+
+function performSplit(onDone) {
+  if (state.parts.length >= 2) { onDone(true); return; }
+  if (!state.parts.length) { onDone(false); return; }
+
+  const src = state.parts[0];
+  const geo = src.geometry;
+  const baseMat = originalMaterials.get(src.uuid) || src.material;
+
+  let islands = null;
+  try { islands = splitGeometryIslands(geo); } catch (e) { console.error(e); islands = null; }
+  if (!islands || islands.length < 2) { onDone(false); return; }
+
+  let list = islands;
+  let remainder = null;
+  if (list.length > MAX_PARTS) {
+    const kept = list.slice(0, MAX_PARTS - 1);
+    const rest = list.slice(MAX_PARTS - 1);
+    const merged = BufferGeometryUtils.mergeGeometries(rest.map(r => r.geo), false);
+    if (merged) { merged.computeBoundingBox(); merged.computeBoundingSphere(); remainder = merged; }
+    list = kept;
+  }
+
+  const parent = src.parent;
+  const srcPos = src.position.clone();
+  const srcQuat = src.quaternion.clone();
+  const srcScale = src.scale.clone();
+  parent.remove(src);
+
+  const newParts = [];
+  const addPart = (g) => {
+    const m = new THREE.Mesh(g, baseMat);
+    m.name = 'part';
+    m.position.copy(srcPos);
+    m.quaternion.copy(srcQuat);
+    m.scale.copy(srcScale);
+    parent.add(m);
+    newParts.push(m);
+  };
+  list.forEach((item) => addPart(item.geo));
+  if (remainder) addPart(remainder);
+
+  geo.dispose();
+  originalMaterials.clear();
+  newParts.forEach((m) => originalMaterials.set(m.uuid, baseMat));
+
+  registerParts();
+  setMode(state.mode);
+  updateExplodeButtonState();
+  updateInfo(state.model);
+  onDone(true);
+}
+
+const loadUI = { active: false, startT: 0, pct: 0, timer: 0 };
+
+function fmtEta(sec) {
+  if (!isFinite(sec) || sec < 0) return '残り時間を計算中…';
+  if (sec < 1) return 'まもなく完了';
+  if (sec < 60) return '残り 約' + Math.ceil(sec) + ' 秒';
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return '残り 約' + m + ' 分 ' + s + ' 秒';
+}
+
+function showLoadOverlay(title) {
+  if (state.slideshow && state.slideshow.loading) return;
+  const ov = document.getElementById('loadOverlay');
+  if (!ov) return;
+  loadUI.active = true;
+  loadUI.startT = performance.now();
+  loadUI.pct = 0;
+  document.getElementById('loadTitle').textContent = title || '読み込み中';
+  document.getElementById('loadStage').textContent = '準備しています…';
+  document.getElementById('loadEta').textContent = '残り時間を計算中…';
+  document.getElementById('loadBar').style.width = '0%';
+  document.getElementById('loadPct').textContent = '0%';
+  ov.classList.add('show');
+  clearInterval(loadUI.timer);
+  loadUI.timer = setInterval(tickEta, 350);
+}
+
+function setLoadStage(text) {
+  const el = document.getElementById('loadStage');
+  if (el) el.textContent = text;
+}
+
+function setLoadPct(p) {
+  loadUI.pct = Math.max(loadUI.pct, Math.max(0, Math.min(100, p)));
+  const bar = document.getElementById('loadBar');
+  const pct = document.getElementById('loadPct');
+  if (bar) bar.style.width = loadUI.pct.toFixed(1) + '%';
+  if (pct) pct.textContent = Math.round(loadUI.pct) + '%';
+}
+
+function tickEta() {
+  if (!loadUI.active) return;
+  const el = document.getElementById('loadEta');
+  if (!el) return;
+  if (loadUI.pct < 3) { el.textContent = '残り時間を計算中…'; return; }
+  const elapsed = (performance.now() - loadUI.startT) / 1000;
+  el.textContent = fmtEta(elapsed * (100 - loadUI.pct) / loadUI.pct);
+}
+
+function hideLoadOverlay() {
+  clearInterval(loadUI.timer);
+  loadUI.timer = 0;
+  loadUI.active = false;
+  const ov = document.getElementById('loadOverlay');
+  setTimeout(() => { if (ov) ov.classList.remove('show'); }, 250);
+}
+
+function yieldFrame(cb) {
+  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(cb, 0)));
+}
+
+function loadSTL(arrayBuffer) {
+  showLoadOverlay('解析中');
+  setLoadStage('STLを解析しています…');
+  setLoadPct(30);
+  yieldFrame(() => {
+    const geometry = stlLoader.parse(arrayBuffer);
+    setLoadPct(70);
+    setLoadStage('法線を計算しています…');
+    yieldFrame(() => {
+      geometry.computeVertexNormals();
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 }));
+      const root = new THREE.Group();
+      root.add(mesh);
+      setLoadPct(90);
+      setLoadStage('シーンに配置しています…');
+      addModelToScene(root);
+      finishLoad();
+    });
+  });
+}
+
+
+function loadPLY(arrayBuffer) {
+  showLoadOverlay('解析中');
+  setLoadStage('PLYを解析しています…');
+  setLoadPct(30);
+  yieldFrame(() => {
+    const geometry = plyLoader.parse(arrayBuffer);
+    setLoadPct(70);
+    setLoadStage('法線を計算しています…');
+    yieldFrame(() => {
+      if (!geometry.attributes.normal) geometry.computeVertexNormals();
+      const hasColor = geometry.attributes.color;
+      const mat = new THREE.MeshStandardMaterial({
+        color: hasColor ? 0xffffff : 0xaaaaaa,
+        roughness: 0.4,
+        metalness: 0.3,
+        vertexColors: !!hasColor
+      });
+      const mesh = new THREE.Mesh(geometry, mat);
+      const root = new THREE.Group();
+      root.add(mesh);
+      setLoadPct(90);
+      setLoadStage('シーンに配置しています…');
+      addModelToScene(root);
+      finishLoad();
+    });
+  });
+}
+
+function loadFBX(arrayBuffer) {
+  showLoadOverlay('解析中');
+  setLoadStage('FBXを解析しています…');
+  setLoadPct(30);
+  yieldFrame(() => {
+    const object = fbxLoader.parse(arrayBuffer);
+    setLoadPct(85);
+    setLoadStage('シーンに配置しています…');
+    addModelToScene(object);
+    finishLoad();
+  });
+}
+
+function loadCollada(text) {
+  showLoadOverlay('解析中');
+  setLoadStage('COLLADAを解析しています…');
+  setLoadPct(30);
+  yieldFrame(() => {
+    const result = colladaLoader.parse(text);
+    setLoadPct(85);
+    setLoadStage('シーンに配置していす…');
+    addModelToScene(result.scene);
+    finishLoad();
+  });
+}
+
+// STEP / IGES 用: occt-import-js を CDN から動的読み込み
+let occtWasmReady = null;
+async function getOcctImporter() {
+  if (occtWasmReady) return occtWasmReady;
+  setLoadStage('STEP/IGES 変換ライブラリを読み込んでいます…');
+  setLoadPct(15);
+  try {
+    const mod = await import('https://unpkg.com/occt-import-js@0.0.21/dist/occt-import-js.js');
+    const occt = mod.default || mod;
+    occtWasmReady = await occt();
+    return occtWasmReady;
+  } catch (e) {
+    console.warn('occt-import-js load error:', e);
+    throw new Error('STEP/IGES 変換ライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。');
+  }
+}
+
+async function loadSTEP_IGES(arrayBuffer, ext) {
+  showLoadOverlay('解析中');
+  setLoadStage('STEP/IGES を変換しています…');
+  setLoadPct(10);
+  try {
+    const occt = await getOcctImporter();
+    setLoadPct(30);
+    const fileName = 'model.' + ext;
+    const result = await occt.ReadFile(fileName, new Uint8Array(arrayBuffer));
+    setLoadPct(60);
+    if (!result || !result.meshes || !result.meshes.length) {
+      throw new Error('メッシュデータが見つかりません。ファイルが破損しているか、対応していない形式です。');
+    }
+    setLoadStage('メッシュを構築しています…');
+    setLoadPct(70);
+    const root = new THREE.Group();
+    const defaultMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 });
+    for (const meshData of result.meshes) {
+      const geo = new THREE.BufferGeometry();
+      const positions = new Float32Array(meshData.attributes[0].array);
+      const normals = meshData.attributes.length > 1 ? new Float32Array(meshData.attributes[1].array) : null;
+      const indices = meshData.index ? new Uint32Array(meshData.index.array) : null;
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      if (normals) geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      if (indices) geo.setIndex(new THREE.BufferAttribute(indices, 1));
+      if (!normals) geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, defaultMat);
+      root.add(mesh);
+    }
+    setLoadPct(90);
+    setLoadStage('シーンに配置しています…');
+    addModelToScene(root);
+    finishLoad();
+  } catch (err) {
+    console.error('STEP/IGES load error:', err);
+    hideLoadOverlay();
+    showToast('STEP/IGES 読み込みエラー: ' + (err.message || '不明'));
+    flushOnDone();
+  }
+}
+
+function loadOBJ(text) {
+  showLoadOverlay('解析中');
+  setLoadStage('OBJを解析しています…');
+  setLoadPct(35);
+  yieldFrame(() => {
+    const obj = objLoader.parse(text);
+    setLoadPct(85);
+    setLoadStage('シーンに配置しています…');
+    addModelToScene(obj);
+    finishLoad();
+  });
+}
+
+function loadGLB(arrayBuffer) {
+  showLoadOverlay('解析中');
+  setLoadStage('GLB/GLTFを解析しています…');
+  setLoadPct(30);
+  const blob = new Blob([arrayBuffer], { type: 'model/gltf-binary' });
+  const url = URL.createObjectURL(blob);
+  gltfLoader.load(url, (gltf) => {
+    URL.revokeObjectURL(url);
+    gltf.scene.traverse((c) => {
+      if (c.isMesh && c.material) {
+        if (Array.isArray(c.material)) {
+          c.material.forEach((m) => { m.side = THREE.DoubleSide; });
+        } else {
+          c.material.side = THREE.DoubleSide;
+        }
+      }
+    });
+    setLoadPct(85);
+    setLoadStage('シーンに配置しています…');
+    yieldFrame(() => { addModelToScene(gltf.scene); finishLoad(); });
+  }, (ev) => {
+    if (ev && ev.total) setLoadPct(30 + (ev.loaded / ev.total) * 45);
+  }, (err) => {
+    URL.revokeObjectURL(url);
+    console.error('GLB load error:', err);
+    hideLoadOverlay();
+    showToast('GLB読み込みエラー: ' + (err.message || '形式不明'));
+    flushOnDone();
+  });
+}
+
+// 簡易3MFパーサー（ThreeMFLoader非対応ファイルのフォールバック）
+async function parse3MFFallback(arrayBuffer) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZipが必要です');
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  // 名前空間を無視して要素を検索するヘルパー
+  function getChildrenByLocalName(parent, localName) {
+    return Array.from(parent.children).filter(c => {
+      const tag = (c.localName || c.tagName.split(':').pop() || '').toLowerCase();
+      return tag === localName.toLowerCase();
+    });
+  }
+
+  // すべての .model ファイルを収集
+  const modelEntries = [];
+  zip.forEach((path, file) => {
+    if (!file.dir && /\.model$/i.test(path)) modelEntries.push({ path, file });
+  });
+  if (!modelEntries.length) throw new Error('modelファイルが見つかりません');
+
+  // すべての<object>を収集
+  const allObjects = new Map();
+  const builds = [];
+
+  for (const { path, file } of modelEntries) {
+    const text = await file.async('text');
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.querySelector('parsererror')) {
+      console.warn('XML parse error in', path);
+      continue;
+    }
+
+    const modelNodes = getChildrenByLocalName(doc, 'model');
+    if (!modelNodes.length) continue;
+    const model = modelNodes[0];
+
+    const resourcesNodes = getChildrenByLocalName(model, 'resources');
+    if (resourcesNodes.length) {
+      getChildrenByLocalName(resourcesNodes[0], 'object').forEach(obj => {
+        const id = obj.getAttribute('id');
+        if (id && !allObjects.has(id)) allObjects.set(id, { objNode: obj, modelPath: path });
+      });
+    }
+
+    const buildNodes = getChildrenByLocalName(model, 'build');
+    if (buildNodes.length) builds.push({ buildNode: buildNodes[0], modelPath: path });
+  }
+
+  if (!allObjects.size) throw new Error('リソースが見つかりません');
+
+  // マテリアル情報の抽出
+  const baseMaterials = new Map();
+  allObjects.forEach(({ objNode }) => {
+    const meshNodes = getChildrenByLocalName(objNode, 'mesh');
+    if (meshNodes.length) {
+      const bmNodes = getChildrenByLocalName(meshNodes[0], 'basematerials');
+      bmNodes.forEach(bm => {
+        const bmid = bm.getAttribute('id');
+        getChildrenByLocalName(bm, 'base').forEach((b, idx) => {
+          const color = b.getAttribute('displaycolor');
+          if (color) baseMaterials.set(`${bmid}_${idx}`, new THREE.Color(color));
+        });
+      });
+    }
+    // object直下のbasematerialsもす
+    getChildrenByLocalName(objNode, 'basematerials').forEach(bm => {
+      const bmid = bm.getAttribute('id');
+      getChildrenByLocalName(bm, 'base').forEach((b, idx) => {
+        const color = b.getAttribute('displaycolor');
+        if (color) baseMaterials.set(`${bmid}_${idx}`, new THREE.Color(color));
+      });
+    });
+  });
+
+  function parseTransform(transformStr) {
+    if (!transformStr) return new THREE.Matrix4();
+    const vals = transformStr.trim().split(/\s+/).map(parseFloat);
+    if (vals.length !== 12) return new THREE.Matrix4();
+    const m = new THREE.Matrix4();
+    m.set(
+      vals[0], vals[1], vals[2], 0,
+      vals[3], vals[4], vals[5], 0,
+      vals[6], vals[7], vals[8], 0,
+      vals[9], vals[10], vals[11], 1
+    );
+    return m;
+  }
+
+  function buildMeshFromNode(meshNode, objNode) {
+    const verticesNodes = getChildrenByLocalName(meshNode, 'vertices');
+    const trianglesNodes = getChildrenByLocalName(meshNode, 'triangles');
+    if (!verticesNodes.length || !trianglesNodes.length) return null;
+
+    const vertexNodes = getChildrenByLocalName(verticesNodes[0], 'vertex');
+    const triangleNodes = getChildrenByLocalName(trianglesNodes[0], 'triangle');
+    if (!vertexNodes.length || !triangleNodes.length) return null;
+
+    const vertices = new Float32Array(vertexNodes.length * 3);
+    vertexNodes.forEach((v, i) => {
+      vertices[i * 3] = parseFloat(v.getAttribute('x')) || 0;
+      vertices[i * 3 + 1] = parseFloat(v.getAttribute('y')) || 0;
+      vertices[i * 3 + 2] = parseFloat(v.getAttribute('z')) || 0;
+    });
+
+    const indices = new Uint32Array(triangleNodes.length * 3);
+    const colors = [];
+    triangleNodes.forEach((t, i) => {
+      indices[i * 3] = parseInt(t.getAttribute('v1'), 10) || 0;
+      indices[i * 3 + 1] = parseInt(t.getAttribute('v2'), 10) || 0;
+      indices[i * 3 + 2] = parseInt(t.getAttribute('v3'), 10) || 0;
+
+      const pid = t.getAttribute('pid');
+      const p1 = t.getAttribute('p1');
+      if (pid && p1 !== null) {
+        const col = baseMaterials.get(`${pid}_${p1}`);
+        if (col) {
+          colors.push(col.r, col.g, col.b);
+          colors.push(col.r, col.g, col.b);
+          colors.push(col.r, col.g, col.b);
+        }
+      }
+    });
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    if (colors.length === vertexNodes.length * 3) {
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    }
+    geo.computeVertexNormals();
+
+    const hasColors = colors.length === vertexNodes.length * 3;
+    const mat = new THREE.MeshStandardMaterial({
+      color: hasColors ? 0xffffff : 0xaaaaaa,
+      vertexColors: hasColors,
+      roughness: 0.4,
+      metalness: 0.3
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = objNode.getAttribute('name') || objNode.getAttribute('id') || 'part';
+    return mesh;
+  }
+
+  function buildObject(objId, parentMatrix) {
+    const objData = allObjects.get(objId);
+    if (!objData) return null;
+    const { objNode } = objData;
+
+    const group = new THREE.Group();
+    group.name = objNode.getAttribute('name') || objNode.getAttribute('id') || 'part';
+
+    const meshNodes = getChildrenByLocalName(objNode, 'mesh');
+    if (meshNodes.length) {
+      const mesh = buildMeshFromNode(meshNodes[0], objNode);
+      if (mesh) {
+        mesh.applyMatrix4(parentMatrix);
+        group.add(mesh);
+      }
+    }
+
+    const componentsNodes = getChildrenByLocalName(objNode, 'components');
+    if (componentsNodes.length) {
+      getChildrenByLocalName(componentsNodes[0], 'component').forEach(comp => {
+        const refId = comp.getAttribute('objectid');
+        if (!refId) return;
+        const localMatrix = parseTransform(comp.getAttribute('transform'));
+        const childMatrix = new THREE.Matrix4().multiplyMatrices(parentMatrix, localMatrix);
+        const child = buildObject(refId, childMatrix);
+        if (child) group.add(child);
+      });
+    }
+
+    return group.children.length > 0 ? group : null;
+  }
+
+  const rootGroup = new THREE.Group();
+
+  // buildセクションから開始
+  for (const { buildNode } of builds) {
+    getChildrenByLocalName(buildNode, 'item').forEach(item => {
+      const objId = item.getAttribute('objectid');
+      if (!objId) return;
+      const matrix = parseTransform(item.getAttribute('transform'));
+      const obj = buildObject(objId, matrix);
+      if (obj) rootGroup.add(obj);
+    });
+  }
+
+  // buildがない場合はすべてのobjectを表示
+  if (!rootGroup.children.length) {
+    allObjects.forEach((_, id) => {
+      const obj = buildObject(id, new THREE.Matrix4());
+      if (obj) rootGroup.add(obj);
+    });
+  }
+
+  if (!rootGroup.children.length) {
+    console.log('3MF fallback debug: objects found =', allObjects.size, 'builds =', builds.length);
+    throw new Error('読み込めるメッシュ見つかりません');
+  }
+  return rootGroup;
+}
+
+function load3MF(arrayBuffer) {
+  showLoadOverlay('解析中');
+  setLoadStage('3MFを解析しています…');
+  setLoadPct(30);
+  const blob = new Blob([arrayBuffer], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel' });
+  const url = URL.createObjectURL(blob);
+  threeMFLoader.load(url, (object3D) => {
+    URL.revokeObjectURL(url);
+    setLoadPct(85);
+    setLoadStage('シーンに配置しています…');
+    yieldFrame(() => { addModelToScene(object3D); finishLoad(); });
+  }, (ev) => {
+    if (ev && ev.total) setLoadPct(30 + (ev.loaded / ev.total) * 45);
+  }, async (err) => {
+    URL.revokeObjectURL(url);
+    console.warn('ThreeMFLoader failed, trying fallback parser:', err);
+    setLoadStage('フォールバック解析試行中…');
+    setLoadPct(40);
+    try {
+      const root = await parse3MFFallback(arrayBuffer);
+      setLoadPct(90);
+      setLoadStage('シーンに配置しています…');
+      addModelToScene(root);
+      finishLoad();
+      showToast('3MF（フォールバック読み込み）', 2000);
+    } catch (fallbackErr) {
+      console.error('3MF fallback error:', fallbackErr);
+      hideLoadOverlay();
+      showToast('3MF読み込みエラー: ' + (fallbackErr.message || '形式不明'));
+      flushOnDone();
+    }
+  });
+}
+
+function finishLoad() {
+  setLoadPct(100);
+  setLoadStage('完了');
+  hideLoadOverlay();
+  if (state.slideshow.loading) {
+    updateSlideStatus();
+  } else {
+    showToast('読み込み完了: ' + state.fileName, 2200);
+  }
+  flushOnDone();
+}
+
+async function loadZIP(arrayBuffer) {
+  if (typeof JSZip === 'undefined') {
+    showToast('ZIP解凍ライブラリが読み込まれていません');
+    return;
+  }
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const files = [];
+    zip.forEach((relativePath, file) => {
+      if (file.dir) return;
+      const lower = relativePath.toLowerCase();
+      let priority = 999;
+      if (lower.endsWith('.glb') || lower.endsWith('.gltf')) priority = 1;
+      else if (lower.endsWith('.3mf')) priority = 2;
+      else if (lower.endsWith('.obj')) priority = 3;
+      else if (lower.endsWith('.stl')) priority = 4;
+      else if (lower.endsWith('.ply')) priority = 5;
+      else if (lower.endsWith('.fbx')) priority = 6;
+      else if (lower.endsWith('.dae')) priority = 7;
+      else if (lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.iges') || lower.endsWith('.igs')) priority = 8;
+      if (priority < 999) files.push({ path: relativePath, file, priority });
+    });
+    if (!files.length) { showToast('ZIP内に対応形式の3Dファイルが見つかりません'); hideLoadOverlay(); flushOnDone(); return; }
+    files.sort((a, b) => a.priority - b.priority || a.path.localeCompare(b.path));
+
+    if (files.length > 1) {
+      setLoadStage('ZIP内の全モデルを展開しています…');
+      setLoadPct(45);
+      const extractedFiles = [];
+      for (let i = 0; i < files.length; i++) {
+        const item = files[i];
+        const blob = await item.file.async('blob');
+        extractedFiles.push(new File([blob], item.path, { type: 'application/octet-stream' }));
+      }
+      const ss = state.slideshow;
+      ss.files = extractedFiles;
+      ss.index = 0;
+      ss.folder = 'ZIP (' + extractedFiles.length + '件)';
+      folderPickLabel.textContent = ss.folder;
+      updateSlideStatus();
+      setLoadPct(100);
+      hideLoadOverlay();
+      showToast('ZIP内 ' + extractedFiles.length + ' 件をスライドショーに登録しました', 2800);
+      handleFile(extractedFiles[0]);
+      return;
+    }
+
+    const first = files[0];
+    const ext = first.path.split('.').pop().toLowerCase();
+    setLoadStage('ZIPを展開しています…');
+    setLoadPct(40);
+    const data = await first.file.async('arraybuffer');
+    setLoadStage('"' + first.path + '" を読み込んでいます…');
+    setLoadPct(55);
+    if (ext === 'glb' || ext === 'gltf') loadGLB(data);
+    else if (ext === '3mf') load3MF(data);
+    else if (ext === 'obj') loadOBJ(new TextDecoder().decode(data));
+    else if (ext === 'stl') loadSTL(data);
+    else if (ext === 'ply') loadPLY(data);
+    else if (ext === 'fbx') loadFBX(data);
+    else if (ext === 'dae') loadCollada(new TextDecoder().decode(data));
+    else if (ext === 'step' || ext === 'stp' || ext === 'iges' || ext === 'igs') loadSTEP_IGES(data, ext);
+  } catch (e) {
+    console.error(e);
+    hideLoadOverlay();
+    showToast('ZIP解凍エラー: ' + (e.message || '不明'));
+    flushOnDone();
+  }
+}
+
+function handleFile(file, onDone) {
+  const done = () => { if (typeof onDone === 'function') onDone(); };
+  const name = file.name;
+  const lower = name.toLowerCase();
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const supported = ['stl', 'obj', 'glb', 'gltf', '3mf', 'ply', 'fbx', 'dae', 'step', 'stp', 'iges', 'igs', 'zip'];
+  if (supported.indexOf(ext) < 0) {
+    showToast('未対応のファイル形式です');
+    done();
+    return;
+  }
+
+  const quiet = state.slideshow.loading;
+  setFileName(name, false);
+  if (!quiet) {
+    showLoadOverlay('読み込み中');
+    setLoadStage('ファイルを読み込んでいます…');
+    setLoadPct(0);
+  }
+  state.pendingOnDone = done;
+
+  const reader = new FileReader();
+  reader.onprogress = (e) => {
+    if (!quiet && e.lengthComputable && e.total) setLoadPct((e.loaded / e.total) * 25);
+  };
+  reader.onerror = () => {
+    hideLoadOverlay();
+    showToast('ファイルの読み込みに失敗しました');
+    flushOnDone();
+  };
+  reader.onload = (e) => {
+    if (!quiet) { setLoadPct(28); setLoadStage('形式を判定しています…'); }
+    yieldFrame(() => {
+      if (lower.endsWith('.stl')) loadSTL(e.target.result);
+      else if (lower.endsWith('.obj')) loadOBJ(e.target.result);
+      else if (lower.endsWith('.glb') || lower.endsWith('.gltf')) loadGLB(e.target.result);
+      else if (lower.endsWith('.3mf')) load3MF(e.target.result);
+      else if (lower.endsWith('.ply')) loadPLY(e.target.result);
+      else if (lower.endsWith('.fbx')) loadFBX(e.target.result);
+      else if (lower.endsWith('.dae')) loadCollada(e.target.result);
+      else if (lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.iges') || lower.endsWith('.igs')) loadSTEP_IGES(e.target.result, ext);
+      else if (lower.endsWith('.zip')) loadZIP(e.target.result);
+    });
+  };
+
+  if (lower.endsWith('.obj') || lower.endsWith('.dae') || lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.iges') || lower.endsWith('.igs')) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+function flushOnDone() {
+  const cb = state.pendingOnDone;
+  state.pendingOnDone = null;
+  if (typeof cb === 'function') cb();
+}
+
+function loadDemo() {
+  const group = new THREE.Group();
+  const mat = (color, rough, metal) =>
+    new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(12, 1.2, 12), mat(0x3f6b8a, 0.5, 0.25));
+  base.position.set(0, 0.6, 0);
+  group.add(base);
+
+  const postGeo = new THREE.CylinderGeometry(0.75, 0.85, 3.6, 28);
+  const postMat = mat(0x8899aa, 0.35, 0.6);
+  const postXZ = 4.6;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+    const post = new THREE.Mesh(postGeo, postMat);
+    post.position.set(sx * postXZ, 3.0, sz * postXZ);
+    group.add(post);
+  });
+
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.9, 9.6), mat(0x5c8fb8, 0.45, 0.4));
+  plate.position.set(0, 5.2, 0);
+  group.add(plate);
+
+  const gear = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.7, 48), mat(0xc98a3a, 0.35, 0.7));
+  gear.add(disc);
+  const toothGeo = new THREE.BoxGeometry(0.62, 0.7, 0.9);
+  const toothMat = mat(0xc98a3a, 0.35, 0.7);
+  const TEETH = 14;
+  for (let i = 0; i < TEETH; i++) {
+    const a = (i / TEETH) * Math.PI * 2;
+    const tooth = new THREE.Mesh(toothGeo, toothMat);
+    tooth.position.set(Math.cos(a) * 2.55, 0, Math.sin(a) * 2.55);
+    tooth.rotation.y = -a;
+    gear.add(tooth);
+  }
+  gear.position.set(0, 6.3, 0);
+  group.add(gear);
+
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.5, 40, 28), mat(0xd2a24a, 0.3, 0.5));
+  ball.position.set(0, 8.9, 0);
+  group.add(ball);
+
+  setFileName('デモモデル', true);
+  addModelToScene(group);
+}
+
+function fsElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+}
+function requestFs(el) {
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (!fn) return null;
+  try { return fn.call(el, { navigationUI: 'hide' }); } catch (e) {
+    try { return fn.call(el); } catch (e2) { return null; }
+  }
+}
+function exitFs() {
+  const fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  if (!fn) return null;
+  try { return fn.call(document); } catch (e) { return null; }
+}
+function updateFullscreenButton() {
+  const on = !!fsElement();
+  const b = document.getElementById('btnFull');
+  b.classList.toggle('active', on);
+  b.textContent = on ? '⤡' : '⛶';
+  b.title = on ? '全画面解除' : '全画面';
+
+  if (uiTimer) { clearTimeout(uiTimer); uiTimer = 0; }
+  uiHidden = false;
+  document.body.classList.remove('ui-hidden');
+  const tb = document.getElementById('toolbar');
+  if (tb) { tb.style.opacity = ''; tb.style.transition = 'none'; tb.offsetHeight; }
+  resetUiTimer();
+  requestAnimationFrame(() => { if (tb) tb.style.transition = ''; });
+
+  setTimeout(() => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    refitView({ recenter: true });
+  }, 180);
+}
+function toggleFullscreen() {
+  if (uiTimer) { clearTimeout(uiTimer); uiTimer = 0; }
+  uiHidden = false;
+  document.body.classList.remove('ui-hidden');
+  const tb = document.getElementById('toolbar');
+  if (tb) { tb.style.opacity = ''; tb.style.transition = 'none'; tb.offsetHeight; }
+
+  if (fsElement()) {
+    document.body.classList.remove('is-fullscreen');
+    const p = exitFs();
+    if (p && p.catch) p.catch(() => {});
+    [100, 250, 500].forEach((ms) => {
+      setTimeout(() => {
+        uiHidden = false;
+        document.body.classList.remove('ui-hidden');
+        resetUiTimer();
+        updateFullscreenButton();
+      }, ms);
+    });
+    return;
+  }
+
+  const isAndroid = /Android/.test(navigator.userAgent || '');
+  let el = isAndroid ? document.body : document.documentElement;
+  let p = requestFs(el);
+  if (!p) { el = isAndroid ? document.documentElement : document.body; p = requestFs(el); }
+  if (!p) { showToast('この環境では全画面表示を利用できません'); resetUiTimer(); return; }
+  if (p.catch) p.catch(() => showToast('全画面表示がブロックされました'));
+
+  const onFsReady = () => {
+    document.body.classList.add('is-fullscreen');
+    window.scrollTo(0, 0);
+    const w = window.innerWidth, h = window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    layoutViewOffset();
+    uiHidden = false;
+    document.body.classList.remove('ui-hidden');
+    resetUiTimer();
+    updateFullscreenButton();
+  };
+  if (p.then) p.then(onFsReady);
+  [100, 300, 600, 1200].forEach((ms) => setTimeout(() => { if (fsElement()) onFsReady(); }, ms));
+}
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+document.addEventListener('msfullscreenchange', updateFullscreenButton);
+
+const rec = { active: false, save: true, recorder: null, chunks: [], startT: 0, period: 10, mime: '', ext: 'webm', wasAuto: false };
+const btnRecord = document.getElementById('btnRecord');
+const recBadge = document.getElementById('recBadge');
+const recSec = document.getElementById('recSec');
+
+function pickMime() {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+  const list = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+  for (const m of list) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} }
+  return '';
+}
+
+function startRecording() {
+  if (rec.active) return;
+  if (!renderer.domElement.captureStream || !window.MediaRecorder) { showToast('このブラウザは動画録画に対応していません'); return; }
+  const mime = pickMime();
+  if (!mime) { showToast('このブラウザは動画録画に対応していません'); return; }
+  rec.mime = mime;
+  rec.ext = mime.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+
+  let stream = null;
+  try { stream = renderer.domElement.captureStream(30); } catch (e) { showToast('録画ストリームを取得できません'); return; }
+
+  rec.recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: state.isMobile ? 6000000 : 10000000 });
+  rec.chunks = [];
+  rec.recorder.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+  rec.recorder.onstop = finishRecording;
+
+  rec.wasAuto = state.autoRotate;
+  state.autoRotate = true;
+  controls.autoRotate = false;
+  state.camTargetDist = null;
+  rec.period = Math.min(Math.max(60 / state.rotateSpeed, 4), 30);
+  rec.startT = performance.now();
+  rec.save = true;
+  try { rec.recorder.start(250); } catch (e) { showToast('録画を開始できません'); return; }
+  rec.active = true;
+  btnRecord.classList.add('active');
+  btnRecord.textContent = '録画停止';
+  recBadge.classList.add('show');
+  recSec.textContent = '0';
+  syncRotateUI();
+  showToast('録画開始: 1回転（約' + rec.period.toFixed(0) + '秒）で自動保存', 2600);
+}
+
+function stopRecording(save) {
+  if (!rec.active) return;
+  rec.active = false;
+  rec.save = save !== false;
+  try { if (rec.recorder.state !== 'inactive') rec.recorder.stop(); } catch (e) {}
+  try { rec.recorder.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+  setAutoRotate(rec.wasAuto);
+  btnRecord.classList.remove('active');
+  btnRecord.textContent = '録画開始';
+  recBadge.classList.remove('show');
+}
+
+function finishRecording() {
+  const chunks = rec.chunks;
+  rec.chunks = [];
+  if (!rec.save || !chunks.length) { if (!rec.save) showToast('録画をキャンセルしました'); return; }
+  const blob = new Blob(chunks, { type: rec.mime });
+  const secs = ((performance.now() - rec.startT) / 1000).toFixed(1);
+  const base = (state.fileName || 'model').replace(/.[^.]+$/, '').replace(/[^\w\-]+/g, '_').slice(0, 40) || 'model';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'holoforge_' + base + '_loop.' + rec.ext;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  showToast('動画を保存しました（' + secs + '秒 / 1回転ループ）', 3200);
+}
+
+btnRecord.addEventListener('click', () => {
+  if (rec.active) stopRecording(true);
+  else startRecording();
+  resetUiTimer();
+});
+
+document.getElementById('btnGrid').addEventListener('click', () => {
+  toggleGrid();
+  resetUiTimer();
+});
+
+document.querySelectorAll('[data-bg]').forEach((dot) => {
+  dot.addEventListener('click', () => {
+    setBackground(dot.dataset.bg);
+    document.querySelectorAll('[data-bg]').forEach((d) => d.classList.remove('active'));
+    dot.classList.add('active');
+    resetUiTimer();
+  });
+});
+
+document.getElementById('bgPicker').addEventListener('input', (e) => {
+  setBackground(e.target.value);
+  document.getElementById('customBgDot').style.background = e.target.value;
+  document.querySelectorAll('[data-bg]').forEach((d) => d.classList.remove('active'));
+  resetUiTimer();
+});
+
+let uiHidden = false;
+let uiTimer = 0;
+
+function resetUiTimer() {
+  if (uiTimer) clearTimeout(uiTimer);
+  uiTimer = setTimeout(hideUI, UI_IDLE_MS);
+}
+function hideUI() {
+  if (uiHidden) return;
+  uiHidden = true;
+  document.body.classList.add('ui-hidden');
+}
+function showUI() {
+  if (!uiHidden) { resetUiTimer(); return; }
+  uiHidden = false;
+  document.body.classList.remove('ui-hidden');
+  const tb = document.getElementById('toolbar');
+  if (tb) { tb.style.opacity = ''; tb.style.transition = 'none'; tb.offsetHeight; tb.style.transition = ''; }
+  resetUiTimer();
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (uiHidden) { showUI(); e.stopPropagation(); e.preventDefault(); }
+  else resetUiTimer();
+}, true);
+document.addEventListener('touchstart', (e) => {
+  if (uiHidden) { showUI(); e.stopPropagation(); e.preventDefault(); }
+  else resetUiTimer();
+}, { capture: true, passive: false });
+document.addEventListener('pointermove', () => { if (uiHidden) showUI(); else resetUiTimer(); }, { capture: true, passive: true });
+document.addEventListener('wheel', () => { if (uiHidden) showUI(); else resetUiTimer(); }, { capture: true, passive: true });
+document.addEventListener('keydown', () => { if (uiHidden) showUI(); else resetUiTimer(); }, true);
+
+document.addEventListener('pointerdown', (e) => {
+  if (!activePopupId) return;
+  const popup = document.getElementById(activePopupId);
+  const btn = document.querySelector('[data-popup="' + activePopupId + '"]');
+  const clickedPopup = popup && popup.contains(e.target);
+  const clickedBtn = btn && btn.contains(e.target);
+  if (!clickedPopup && !clickedBtn) closeAllPopups();
+}, true);
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+  e.target.value = '';
+  resetUiTimer();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  loadDemo();
+  showToast('リセットしました');
+  resetUiTimer();
+});
+
+document.getElementById('btnFull').addEventListener('click', () => {
+  toggleFullscreen();
+  resetUiTimer();
+});
+
+document.getElementById('btnModeOriginal').addEventListener('click', () => setMode('original'));
+document.getElementById('btnModeSolid').addEventListener('click', () => setMode('solid'));
+document.getElementById('btnModeHolo').addEventListener('click', () => setMode('holo'));
+
+document.querySelectorAll('.color-dot[data-color]').forEach(dot => {
+  dot.addEventListener('click', () => {
+    document.querySelectorAll('.color-dot[data-color]').forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+    state.currentColor.set(dot.dataset.color);
+    applyCurrentColor();
+  });
+});
+
+document.getElementById('colorPicker').addEventListener('input', (e) => {
+  document.querySelectorAll('.color-dot[data-color]').forEach(d => d.classList.remove('active'));
+  document.getElementById('customColorDot').classList.add('active');
+  state.currentColor.set(e.target.value);
+  applyCurrentColor();
+});
+
+const bindSlider = (id, key) => {
+  document.getElementById(id).addEventListener('input', (e) => {
+    state[key] = parseFloat(e.target.value);
+    refreshHologramUniforms();
+  });
+};
+bindSlider('glowSlider', 'glowIntensity');
+bindSlider('speedSlider', 'scanSpeed');
+bindSlider('scanSlider', 'scanIntensity');
+bindSlider('noiseSlider', 'noiseIntensity');
+
+document.getElementById('explodeSlider').addEventListener('input', (e) => {
+  state.explodeAmount = parseFloat(e.target.value);
+  if (state.explodeOn) updateExplodeTargets();
+});
+
+const scaleSlider = document.getElementById('scaleSlider');
+if (scaleSlider) {
+  scaleSlider.addEventListener('input', (e) => applyModelScale(parseFloat(e.target.value)));
+  scaleSlider.addEventListener('change', () => resetUiTimer());
+}
+
+document.querySelectorAll('#patternGroup .seg-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#patternGroup .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.explodePattern = btn.dataset.pattern;
+    if (state.explodeOn) {
+      updateExplodeTargets();
+      smoothCamTo(fitDistanceForRadius(extentFor(1).radius));
+    }
+    resetUiTimer();
+  });
+});
+
+const btnExplode = document.getElementById('btnExplode');
+btnExplode.addEventListener('click', () => {
+  if (state.explodeOn) { setExplode(false); return; }
+  if (state.parts.length >= 2) { setExplode(true); return; }
+  showToast('パーツを解析中...', 8000);
+  setTimeout(() => {
+    performSplit((ok) => {
+      if (ok && state.parts.length >= 2) {
+        setExplode(true);
+        showToast(state.parts.length + ' パーツに分割しました');
+      } else {
+        btnExplode.disabled = true;
+        btnExplode.classList.add('disabled');
+        showToast('このモデルは分割できません（1パーツ）');
+      }
+    });
+  }, 60);
+});
+
+const btnTbRotate = document.getElementById('btnTbRotate');
+const rotHint = document.getElementById('rotHint');
+
+function syncRotateUI() {
+  const on = state.autoRotate;
+  btnTbRotate.classList.toggle('rotating', on);
+  btnTbRotate.classList.toggle('active', on);
+  btnTbRotate.title = on ? '回転を停止' : '自動回転を開始';
+  btnTbRotate.setAttribute('aria-label', on ? '回転を停止' : '自動回転を開始');
+  if (rotHint) rotHint.textContent = on ? '回転中 — もう一度押すと停止' : 'ボタンを押すと回転します';
+}
+
+function setAutoRotate(on) {
+  state.autoRotate = on;
+  controls.autoRotate = on;
+  syncRotateUI();
+}
+
+btnTbRotate.addEventListener('click', (e) => {
+  e.stopPropagation(); e.preventDefault();
+  if (rec.active) { showToast('録画中は回転設定を変更できません'); return; }
+  const turningOn = !state.autoRotate;
+  setAutoRotate(turningOn);
+  if (turningOn) {
+    openPopup('popupRotate');
+    showToast('自動回転を開始しました', 1600);
+  } else {
+    closeAllPopups();
+    showToast('自動回転を停止しました', 1600);
+  }
+  resetUiTimer();
+}, true);
+
+// Orientation controls
+document.getElementById('btnTbOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (activePopupId === 'popupOrient') closeAllPopups();
+  else openPopup('popupOrient');
+  resetUiTimer();
+});
+
+document.getElementById('btnAutoOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  autoOrient();
+  resetUiTimer();
+});
+
+document.getElementById('btnYup').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setYup();
+  resetUiTimer();
+});
+
+document.getElementById('btnZup').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setZup();
+  resetUiTimer();
+});
+
+document.getElementById('btnResetOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  resetOrientation();
+  resetUiTimer();
+});
+
+document.querySelectorAll('#speedGroup .seg-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (rec.active) { showToast('録画中は回転設定を変更できません'); return; }
+    document.querySelectorAll('#speedGroup .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.rotateSpeed = parseFloat(btn.dataset.rot);
+    controls.autoRotateSpeed = state.rotateSpeed;
+    if (!state.autoRotate) setAutoRotate(true);
+    resetUiTimer();
+  });
+});
+btnTbRotate.removeAttribute('data-popup');
+
+const SUPPORTED_EXT = ['stl', 'obj', 'glb', 'gltf', '3mf', 'ply', 'fbx', 'dae', 'step', 'stp', 'iges', 'igs'];
+const slideInput = document.getElementById('folderInput');
+const slideStatusEl = document.getElementById('slideStatus');
+const slideToggleBtn = document.getElementById('btnSlideToggle');
+const folderPickLabel = document.getElementById('folderPickLabel');
+const btnTbSlide = document.getElementById('btnTbSlide');
+
+function isModelFile(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return SUPPORTED_EXT.indexOf(ext) >= 0;
+}
+
+function updateSlideStatus() {
+  const ss = state.slideshow;
+  if (!ss.files.length) {
+    slideStatusEl.innerHTML = 'フォルダを選択してください';
+    return;
+  }
+  const cur = ss.index >= 0 ? (ss.index + 1) : 0;
+  const name = ss.index >= 0 ? ss.files[ss.index].name : '—';
+  slideStatusEl.innerHTML = '<b>' + cur + ' / ' + ss.files.length + '</b> 件<br>' + escapeHtml(name);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function clearSlideTimer() {
+  if (state.slideshow.timer) { clearTimeout(state.slideshow.timer); state.slideshow.timer = 0; }
+}
+
+function scheduleNextSlide() {
+  clearSlideTimer();
+  const ss = state.slideshow;
+  if (!ss.running || ss.files.length < 2) return;
+  ss.timer = setTimeout(() => { showSlideAt(ss.index + 1); }, ss.interval);
+}
+
+function clearSlideWatchdog() {
+  const ss = state.slideshow;
+  if (ss.watchdog) { clearTimeout(ss.watchdog); ss.watchdog = 0; }
+}
+
+function showSlideAt(i) {
+  const ss = state.slideshow;
+  if (!ss.files.length) return;
+  clearSlideTimer();
+  ss.index = ((i % ss.files.length) + ss.files.length) % ss.files.length;
+  updateSlideStatus();
+  const file = ss.files[ss.index];
+  ss.loading = true;
+
+  const advance = () => {
+    if (!ss.loading) return;
+    ss.loading = false;
+    clearSlideWatchdog();
+    scheduleNextSlide();
+  };
+  clearSlideWatchdog();
+  ss.watchdog = setTimeout(advance, 45000);
+  handleFile(file, advance);
+}
+
+function startSlideshow() {
+  const ss = state.slideshow;
+  if (ss.files.length < 1) { showToast('先にフォルダを選択してください'); return; }
+  if (ss.running) return;
+  ss.running = true;
+  btnTbSlide.classList.add('playing');
+  slideToggleBtn.textContent = '停止';
+  slideToggleBtn.classList.add('active');
+  if (ss.index < 0) ss.index = -1;
+  showSlideAt(ss.index + 1);
+  showToast('スライドショー開始（' + Math.round(ss.interval / 1000) + '秒間隔）', 2200);
+}
+
+function stopSlideshow(silent) {
+  const ss = state.slideshow;
+  if (!ss.running) return;
+  ss.running = false;
+  clearSlideTimer();
+  clearSlideWatchdog();
+  btnTbSlide.classList.remove('playing');
+  slideToggleBtn.textContent = '開始';
+  slideToggleBtn.classList.remove('active');
+  if (!silent) showToast('スライドショーを停止しました', 1800);
+}
+
+function toggleSlideshow() {
+  if (state.slideshow.running) stopSlideshow();
+  else startSlideshow();
+}
+
+slideInput.addEventListener('change', async (e) => {
+  const all = Array.from(e.target.files || []);
+  e.target.value = '';
+  const models = all.filter((f) => isModelFile(f.name));
+  if (!models.length) { showToast('このフォルダに3Dデータがありません'); return; }
+  models.sort((a, b) => {
+    const pa = (a.webkitRelativePath || a.name).toLowerCase();
+    const pb = (b.webkitRelativePath || b.name).toLowerCase();
+    return pa < pb ? -1 : pa > pb ? 1 : 0;
+  });
+  const ss = state.slideshow;
+  ss.files = models;
+  ss.index = -1;
+  const rel = models[0].webkitRelativePath || '';
+  ss.folder = rel.indexOf('/') >= 0 ? rel.split('/')[0] : '選択ォルダ';
+  folderPickLabel.textContent = ss.folder.length > 16 ? ss.folder.slice(0, 16) + '…' : ss.folder;
+  updateSlideStatus();
+  showToast(models.length + ' 件の3Dデータを記憶しました', 2200);
+
+  await saveSlideshowToDB(ss.folder, models);
+  const clearBtn = document.getElementById('btnSlideClear');
+  if (clearBtn) clearBtn.style.display = 'block';
+
+  if (ss.running) showSlideAt(0);
+});
+
+const btnSlideClear = document.getElementById('btnSlideClear');
+if (btnSlideClear) {
+  btnSlideClear.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    stopSlideshow(true);
+    await clearSlideshowDB();
+    const ss = state.slideshow;
+    ss.files = [];
+    ss.index = -1;
+    ss.folder = '';
+    folderPickLabel.textContent = 'フォルダを選択';
+    updateSlideStatus();
+    btnSlideClear.style.display = 'none';
+    showToast('フォルダの記憶を解除しました');
+    resetUiTimer();
+  });
+}
+
+slideToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleSlideshow(); resetUiTimer(); });
+
+document.querySelectorAll('#slideInterval .seg-btn').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('#slideInterval .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.slideshow.interval = parseFloat(btn.dataset.sec) * 1000;
+    savePreferences();
+    if (state.slideshow.running) scheduleNextSlide();
+    resetUiTimer();
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (!state.slideshow.files.length) return;
+  if (e.key === 'ArrowRight') { showSlideAt(state.slideshow.index + 1); }
+  else if (e.key === 'ArrowLeft') { showSlideAt(state.slideshow.index - 1); }
+});
+
+const dropOverlay = document.createElement('div');
+dropOverlay.style.cssText = 'position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;background:rgba(0,229,255,0.08);border:3px dashed var(--accent);pointer-events:none;';
+dropOverlay.innerHTML = '<div style="background:rgba(6,10,18,0.85);border:1px solid var(--line);border-radius:var(--radius);padding:18px 28px;text-align:center;box-shadow:0 18px 48px rgba(0,0,0,0.55);"><div style="font-size:28px;margin-bottom:6px;">📂</div><div style="font-size:14px;color:var(--ink);">ここに3Dファイルをドロップ</div></div>';
+document.body.appendChild(dropOverlay);
+
+window.addEventListener('dragenter', (e) => { e.preventDefault(); dropOverlay.style.display = 'flex'; });
+window.addEventListener('dragover',  (e) => { e.preventDefault(); });
+window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) dropOverlay.style.display = 'none'; });
+window.addEventListener('drop', (e) => {
+  e.preventDefault(); dropOverlay.style.display = 'none';
+  const files = Array.from(e.dataTransfer.files || []);
+  if (!files.length) return;
+  const models = files.filter((f) => isModelFile(f.name));
+  if (models.length > 1) {
+    models.sort((a, b) => a.name.localeCompare(b.name));
+    const ss = state.slideshow;
+    ss.files = models;
+    ss.index = 0;
+    ss.folder = '一括ドロップ (' + models.length + '件)';
+    folderPickLabel.textContent = ss.folder;
+    updateSlideStatus();
+    showToast(models.length + ' のファイルをスライドショーに登録しました', 2400);
+    handleFile(models[0]);
+  } else if (models.length === 1) {
+    handleFile(models[0]);
+  } else {
+    showToast('ドロップされたファイルに3Dデータがありません');
+  }
+});
+
+const popupOverlay = document.getElementById('popupOverlay');
+let activePopupId = null;
+
+function openPopup(popupId) {
+  if (activePopupId && activePopupId !== popupId) {
+    const prev = document.getElementById(activePopupId);
+    if (prev) prev.classList.remove('show');
+    const prevBtn = document.querySelector('[data-popup="' + activePopupId + '"]');
+    if (prevBtn) prevBtn.classList.remove('active');
+  }
+  const popup = document.getElementById(popupId);
+  const btn = document.querySelector('[data-popup="' + popupId + '"]');
+  if (!popup) return;
+  popup.classList.add('show');
+  if (btn) btn.classList.add('active');
+  popupOverlay.classList.add('show');
+  activePopupId = popupId;
+  if (uiTimer) { clearTimeout(uiTimer); uiTimer = 0; }
+}
+
+function closeAllPopups() {
+  document.querySelectorAll('.toolbar-popup').forEach(p => p.classList.remove('show'));
+  document.querySelectorAll('.toolbar-btn:not(.rotating):not(.playing)').forEach(b => b.classList.remove('active'));
+  popupOverlay.classList.remove('show');
+  activePopupId = null;
+  resetUiTimer();
+}
+
+popupOverlay.addEventListener('click', closeAllPopups);
+
+document.querySelectorAll('.toolbar-btn').forEach(btn => {
+  if (btn.id === 'btnTbRotate') return;
+  const popupId = btn.id.replace('btnTb', 'popup');
+  btn.setAttribute('data-popup', popupId);
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activePopupId === popupId) closeAllPopups();
+    else openPopup(popupId);
+  });
+});
+
+const activePointers = new Set();
+let lastTapT = 0, lastTapX = 0, lastTapY = 0;
+renderer.domElement.addEventListener('pointerdown', (e) => activePointers.add(e.pointerId));
+renderer.domElement.addEventListener('pointercancel', (e) => activePointers.delete(e.pointerId));
+renderer.domElement.addEventListener('pointerup', (e) => {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size !== 0) return;
+  const now = performance.now();
+  const moved = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
+  if (now - lastTapT < 320 && moved < 24) {
+    lastTapT = 0;
+    const ss = state.slideshow;
+    if (ss && ss.running && ss.files.length > 1) {
+      showSlideAt(ss.index + 1);
+    } else {
+      refitView({ recenter: true });
+      showToast('表示範囲を再調整しました');
+    }
+  } else {
+    lastTapT = now; lastTapX = e.clientX; lastTapY = e.clientY;
+  }
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  state.isMobile = window.innerWidth < 768;
+  layoutViewOffset();
+});
+
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    state.isMobile = window.innerWidth < 768;
+    refitView({ recenter: true });
+  }, 250);
+});
+
+const clock = new THREE.Clock();
+let holoTime = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+  holoTime += dt;
+  if (state.hologramMaterial) state.hologramMaterial.uniforms.uTime.value = holoTime;
+
+  if (rec.active) {
+    const el = (performance.now() - rec.startT) / 1000;
+    recSec.textContent = String(Math.min(Math.floor(el), Math.floor(rec.period)));
+    const omega = (Math.PI * 2) / rec.period;
+    const off = camera.position.clone().sub(controls.target);
+    off.applyAxisAngle(UP, omega * dt);
+    camera.position.copy(controls.target).add(off);
+    if (el >= rec.period) stopRecording(true);
+  } else if (state.camTargetDist != null) {
+    const off = camera.position.clone().sub(controls.target);
+    const cur = off.length() || 1e-6;
+    let nd = cur + (state.camTargetDist - cur) * 0.12;
+    if (Math.abs(nd - state.camTargetDist) < state.camTargetDist * 0.002) {
+      nd = state.camTargetDist;
+      state.camTargetDist = null;
+    }
+    off.multiplyScalar(nd / cur);
+    camera.position.copy(controls.target).add(off);
+  }
+
+  if (state.parts.length > 1) {
+    state.parts.forEach((p) => {
+      const t = p.userData.targetPos;
+      if (t) p.position.lerp(t, 0.12);
+    });
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function applyLoadedPreferences() {
+  gridHelper.visible = state.gridVisible;
+  const btnG = document.getElementById('btnGrid');
+  if (btnG) {
+    btnG.classList.toggle('active', state.gridVisible);
+    btnG.textContent = state.gridVisible ? 'グリッド ON' : 'グリッド OFF';
+  }
+  setBackground(state.bgColor);
+  document.querySelectorAll('[data-bg]').forEach(d => {
+    d.classList.toggle('active', d.dataset.bg === state.bgColor);
+  });
+  const sl = document.getElementById('scaleSlider');
+  const lbl = document.getElementById('scaleLabel');
+  if (sl) sl.value = String(Math.round(state.modelScale * 100));
+  if (lbl) lbl.textContent = Math.round(state.modelScale * 100) + '%';
+
+  const sec = Math.round(state.slideshow.interval / 1000);
+  document.querySelectorAll('#slideInterval .seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sec === String(sec));
+  });
+  document.querySelectorAll('#speedGroup .seg-btn').forEach(b => {
+    b.classList.toggle('active', parseFloat(b.dataset.rot) === state.rotateSpeed);
+  });
+}
+applyLoadedPreferences();
+
+loadSlideshowFromDB().then((cached) => {
+  if (cached && cached.files && cached.files.length > 0) {
+    const ss = state.slideshow;
+    ss.files = cached.files;
+    ss.folder = cached.folderName;
+    ss.index = 0;
+    folderPickLabel.textContent = (ss.folder.length > 14 ? ss.folder.slice(0, 14) + '…' : ss.folder) + ' (記憶中)';
+    updateSlideStatus();
+    const clearBtn = document.getElementById('btnSlideClear');
+    if (clearBtn) clearBtn.style.display = 'block';
+    showToast('前回のフォルダ "' + ss.folder + '" (' + cached.files.length + '件) を復元しました', 3200);
+  }
+});
+
+loadDemo();
+animate();
+updateFullscreenButton();
+syncRotateUI();
+resetUiTimer();
+
+setTimeout(() => document.getElementById('loadingScreen').classList.add('hide'), 800);
+if (state.isMobile) {
+  setTimeout(() => document.getElementById('touchHint').classList.add('show'), 1200);
+  setTimeout(() => document.getElementById('touchHint').classList.remove('show'), 6000);
+}
+setTimeout(() => showToast('HoloForge Viewer v1.4.0 (最新版)', 2600), 1000);
+</script>
+</body>
+</html>
