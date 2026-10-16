@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  HoloForge Viewer v1.4.0
+  HoloForge Viewer v1.4.1
   - Centered: Camera offset removed for true screen centering
   - Slideshow: Advance only on double-tap (prevents rotation mis-trigger)
   - Persistent: Grid, colors, scale auto-saved
@@ -15,7 +15,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
 <meta name="theme-color" content="#06080e">
-<title>HoloForge Viewer v1.4.0</title>
+<title>HoloForge Viewer v1.4.1</title>
 <script type="text/javascript" nonce="d8f325e8992b4c14aa4c8976b96" src="//local.adguard.org?ts=1791871653595&amp;type=content-script&amp;dmn=chat.sakana.ai&amp;url=https%3A%2F%2Fchat.sakana.ai%2Fapi%2Fconversation%2F01a1335f-7b3b-749f-98b7-2f85275998b2%2Foutput%2Fbf19507ad86a51e234cf8e6034de9c6b61bf283e0b6a99cf156d267bef78a77c&amp;app=com.android.chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23090c14'/%3E%3Cpath d='M50 13 L84 33 L84 67 L50 87 L16 67 L16 33 Z' fill='none' stroke='%2300e5ff' stroke-width='6' stroke-linejoin='round'/%3E%3Cpath d='M55 29 L36 57 L48 57 L44 77 L65 46 L52 46 Z' fill='%23ff3d80'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -384,13 +384,13 @@ body.ui-hidden .touch-hint { opacity: 0; }
 <div id="loadingScreen" class="loading-screen">
   <div class="loader-ring"></div>
   <p>HOLOFORGE VIEWER</p>
-  <p class="load-ver">v1.4.0</p>
+  <p class="load-ver">v1.4.1</p>
 </div>
 
 <header class="app-header">
   <div class="title-group">
     <div class="app-title">⬡ HOLOFORGE</div>
-    <span class="version-badge" id="versionBadge">v1.4.0</span>
+    <span class="version-badge" id="versionBadge">v1.4.1</span>
   </div>
   <div class="header-actions">
     <label class="btn btn-text-hide" title="3Dファイルを開く">
@@ -2924,7 +2924,7 @@ function closeAllPopups() {
 popupOverlay.addEventListener('click', closeAllPopups);
 
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
-  if (btn.id === 'btnTbRotate') return;
+  if (btn.id === 'btnTbRotate' || btn.id === 'btnTbOrient') return;
   const popupId = btn.id.replace('btnTb', 'popup');
   btn.setAttribute('data-popup', popupId);
   btn.addEventListener('click', (e) => {
@@ -3065,7 +3065,7 @@ if (state.isMobile) {
   setTimeout(() => document.getElementById('touchHint').classList.add('show'), 1200);
   setTimeout(() => document.getElementById('touchHint').classList.remove('show'), 6000);
 }
-setTimeout(() => showToast('HoloForge Viewer v1.4.0 (最新版)', 2600), 1000);
+setTimeout(() => showToast('HoloForge Viewer v1.4.1 (最新版)', 2600), 1000);
 </script>
 </body>
 </html>
