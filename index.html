@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  HoloForge Viewer v1.4.5
+  HoloForge Viewer v1.4.6
   - Centered: Camera offset removed for true screen centering
   - Slideshow: Advance only on double-tap (prevents rotation mis-trigger)
   - Persistent: Grid, colors, scale auto-saved
@@ -15,7 +15,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
 <meta name="theme-color" content="#06080e">
-<title>HoloForge Viewer v1.4.5</title>
+<title>HoloForge Viewer v1.4.6</title>
 <script type="text/javascript" nonce="d8f325e8992b4c14aa4c8976b96" src="//local.adguard.org?ts=1791871653595&amp;type=content-script&amp;dmn=chat.sakana.ai&amp;url=https%3A%2F%2Fchat.sakana.ai%2Fapi%2Fconversation%2F01a1335f-7b3b-749f-98b7-2f85275998b2%2Foutput%2Fbf19507ad86a51e234cf8e6034de9c6b61bf283e0b6a99cf156d267bef78a77c&amp;app=com.android.chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23090c14'/%3E%3Cpath d='M50 13 L84 33 L84 67 L50 87 L16 67 L16 33 Z' fill='none' stroke='%2300e5ff' stroke-width='6' stroke-linejoin='round'/%3E%3Cpath d='M55 29 L36 57 L48 57 L44 77 L65 46 L52 46 Z' fill='%23ff3d80'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -384,13 +384,13 @@ body.ui-hidden .touch-hint { opacity: 0; }
 <div id="loadingScreen" class="loading-screen">
   <div class="loader-ring"></div>
   <p>HOLOFORGE VIEWER</p>
-  <p class="load-ver">v1.4.5</p>
+  <p class="load-ver">v1.4.6</p>
 </div>
 
 <header class="app-header">
   <div class="title-group">
     <div class="app-title">⬡ HOLOFORGE</div>
-    <span class="version-badge" id="versionBadge">v1.4.5</span>
+    <span class="version-badge" id="versionBadge">v1.4.6</span>
   </div>
   <div class="header-actions">
     <label class="btn btn-text-hide" title="3Dファイルを開く">
@@ -452,7 +452,9 @@ body.ui-hidden .touch-hint { opacity: 0; }
   <button class="toolbar-btn" id="btnTbRotate" title="回転" aria-label="回転">
     <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg>
   </button>
-  
+  <button class="toolbar-btn" id="btnTbOrient" title="向き補正" aria-label="向き補正">
+    <svg viewBox="0 0 24 24"><path d="M12 2l3 4h-6z"/><path d="M12 6v16"/><path d="M5 12l7-5 7 5"/><path d="M2 12h20"/></svg>
+  </button>
   <button class="toolbar-btn" id="btnTbRecord" title="録画" aria-label="録画">
     <svg viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5z"/></svg>
   </button>
@@ -564,11 +566,21 @@ body.ui-hidden .touch-hint { opacity: 0; }
       <button class="seg-btn" data-rot="4.5">普通</button>
       <button class="seg-btn" data-rot="9">高速</button>
     </div>
-
+    <button class="btn" id="btnResetOrient" style="width:100%;">向きリセット</button>
   </div>
 </div>
 
-    <button class="btn" id="btnResetOrient" style="width:100%;">向きリセット</button>
+<!-- Popup: Orientation -->
+<div class="toolbar-popup" id="popupOrient" data-parent="btnTbOrient">
+  <div class="popup-title">向き補正</div>
+  <div class="popup-body">
+    <button class="btn" id="btnAutoOrient" style="width:100%;margin-bottom:10px;">自動正立</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">座標系切り替え</div>
+    <div class="popup-row" style="gap:8px;margin-bottom:10px;">
+      <button class="btn" id="btnYup" style="flex:1;font-size:12px;">Y-up</button>
+      <button class="btn" id="btnZup" style="flex:1;font-size:12px;">Z-up</button>
+    </div>
+    <div id="rotHint" style="font-size:11px;color:var(--muted);margin-top:8px;">ボタンを押すと回転します</div>
   </div>
 </div>
 
@@ -605,6 +617,27 @@ body.ui-hidden .touch-hint { opacity: 0; }
 
 <div class="popup-overlay" id="popupOverlay"></div>
 
+<script>
+// 起動ウォッチドッグ（通常スクリプト）:
+// Three.js 等のモジュール読み込みに失敗するとアプリ本体が起動せず、
+// ローディング画面のまま固まってしまうため、一定時間内に本体側の
+// 起動フラグが立たなければエラーメッセージを表示する。
+window.__holoforgeBooted = false;
+setTimeout(function () {
+  if (window.__holoforgeBooted) return;
+  var screen = document.getElementById('loadingScreen');
+  if (!screen) return;
+  screen.classList.remove('hide');
+  var msg = document.getElementById('loadErrorMsg');
+  if (!msg) {
+    msg = document.createElement('p');
+    msg.id = 'loadErrorMsg';
+    msg.style.cssText = 'color:#ff6b81;letter-spacing:normal;font-size:13px;line-height:1.8;max-width:84vw;text-align:center;';
+    screen.appendChild(msg);
+  }
+  msg.textContent = '読み込みに時間がかかっています。ネットワーク接続を確認してください。Three.js 等のライブラリ読み込みに失敗した可能性があります。通信環境の良い場所で、ページを再読み込みしてください。';
+}, 7000);
+</script>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -635,6 +668,8 @@ const state = {
   autoRotate: false,
   rotateSpeed: 2,
   model: null,
+  orientationGroup: null,
+  originalOrientation: null,
   mode: 'original',
   fileName: 'デモモデル',
   normScale: 1,
@@ -770,6 +805,10 @@ const originalMaterials = new Map();
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(state.bgColor);
+
+// 向き補正用グループ（モデルの親としてぶら下げ、自動正立・Y-up/Z-up 切り替えはこのグループを回転させる）
+state.orientationGroup = new THREE.Group();
+scene.add(state.orientationGroup);
 
 function setBackground(color) {
   state.bgColor = color;
@@ -1464,6 +1503,60 @@ function placeAndFit(root) {
 
 
 
+
+function autoOrient() {
+  if (!state.model || !state.orientationGroup) return;
+  const box = new THREE.Box3().setFromObject(state.model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim < 0.0001) return;
+
+  // 最も大きい面を底面にする回転を計算
+  const dx = size.x, dy = size.y, dz = size.z;
+  let q = new THREE.Quaternion();
+
+  if (dy >= dx && dy >= dz) {
+    // Yが最も大きい → すでに正立に近い
+    q.set(0, 0, 0, 1);
+  } else if (dz >= dx && dz >= dy) {
+    // Zが最も大きい → ZをYに回転
+    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  } else {
+    // Xが最も大きい → XをYに回転
+    q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  }
+
+  state.orientationGroup.quaternion.copy(q);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('自動正立を適用しました', 1800);
+}
+
+function setYup() {
+  if (!state.orientationGroup) return;
+  state.orientationGroup.quaternion.set(0, 0, 0, 1);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('Y-up に設定しました', 1800);
+}
+
+function setZup() {
+  if (!state.orientationGroup) return;
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  state.orientationGroup.quaternion.copy(q);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('Z-up に設定しました', 1800);
+}
+
+function resetOrientation() {
+  if (!state.orientationGroup) return;
+  state.orientationGroup.quaternion.set(0, 0, 0, 1);
+  state.orientationGroup.updateMatrixWorld(true);
+  refitView({ recenter: true });
+  showToast('向きをリセットしました', 1800);
+}
+
 function finalizeFit() {
   const s0 = extentFor(0);
   const d0 = fitDistanceForRadius(s0.radius);
@@ -1491,6 +1584,11 @@ function disposeModel() {
 
 function addModelToScene(sourceObject) {
   disposeModel();
+  // 新規モデルは未補正の状態から始める（前のモデルの向き補正を引き継がない）
+  if (state.orientationGroup) {
+    state.orientationGroup.quaternion.set(0, 0, 0, 1);
+    state.orientationGroup.updateMatrixWorld(true);
+  }
   const group = flattenToGroup(sourceObject);
   state.model = group;
   if (state.orientationGroup) state.orientationGroup.add(group);
@@ -2185,7 +2283,7 @@ function handleFile(file, onDone) {
     });
   };
 
-  if (lower.endsWith('.obj') || lower.endsWith('.dae') || lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.iges') || lower.endsWith('.igs')) reader.readAsText(file);
+  if (lower.endsWith('.obj') || lower.endsWith('.dae')) reader.readAsText(file);
   else reader.readAsArrayBuffer(file);
 }
 
@@ -2596,6 +2694,37 @@ btnTbRotate.addEventListener('click', (e) => {
   resetUiTimer();
 }, true);
 
+// Orientation controls
+document.getElementById('btnTbOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (activePopupId === 'popupOrient') closeAllPopups();
+  else openPopup('popupOrient');
+  resetUiTimer();
+});
+
+document.getElementById('btnAutoOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  autoOrient();
+  resetUiTimer();
+});
+
+document.getElementById('btnYup').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setYup();
+  resetUiTimer();
+});
+
+document.getElementById('btnZup').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setZup();
+  resetUiTimer();
+});
+
+document.getElementById('btnResetOrient').addEventListener('click', (e) => {
+  e.stopPropagation();
+  resetOrientation();
+  resetUiTimer();
+});
 
 document.querySelectorAll('#speedGroup .seg-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
@@ -2829,7 +2958,7 @@ function closeAllPopups() {
 popupOverlay.addEventListener('click', closeAllPopups);
 
 document.querySelectorAll('.toolbar-btn').forEach(btn => {
-  if (btn.id === 'btnTbRotate') return;
+  if (btn.id === 'btnTbRotate' || btn.id === 'btnTbOrient') return;
   const popupId = btn.id.replace('btnTb', 'popup');
   btn.setAttribute('data-popup', popupId);
   btn.addEventListener('click', (e) => {
@@ -2965,12 +3094,13 @@ updateFullscreenButton();
 syncRotateUI();
 resetUiTimer();
 
+window.__holoforgeBooted = true;
 setTimeout(() => document.getElementById('loadingScreen').classList.add('hide'), 800);
 if (state.isMobile) {
   setTimeout(() => document.getElementById('touchHint').classList.add('show'), 1200);
   setTimeout(() => document.getElementById('touchHint').classList.remove('show'), 6000);
 }
-setTimeout(() => showToast('HoloForge Viewer v1.4.5 (最新版)', 2600), 1000);
+setTimeout(() => showToast('HoloForge Viewer v1.4.6 (最新版)', 2600), 1000);
 </script>
 </body>
 </html>
