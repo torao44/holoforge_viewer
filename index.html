@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  HoloForge Viewer v1.4.7
+  HoloForge Viewer v1.4.8
   - Centered: Camera offset removed for true screen centering
   - Slideshow: Advance only on double-tap (prevents rotation mis-trigger)
   - Persistent: Grid, colors, scale auto-saved
@@ -15,7 +15,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
 <meta name="theme-color" content="#06080e">
-<title>HoloForge Viewer v1.4.7</title>
+<title>HoloForge Viewer v1.4.8</title>
 <script type="text/javascript" nonce="d8f325e8992b4c14aa4c8976b96" src="//local.adguard.org?ts=1791871653595&amp;type=content-script&amp;dmn=chat.sakana.ai&amp;url=https%3A%2F%2Fchat.sakana.ai%2Fapi%2Fconversation%2F01a1335f-7b3b-749f-98b7-2f85275998b2%2Foutput%2Fbf19507ad86a51e234cf8e6034de9c6b61bf283e0b6a99cf156d267bef78a77c&amp;app=com.android.chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23090c14'/%3E%3Cpath d='M50 13 L84 33 L84 67 L50 87 L16 67 L16 33 Z' fill='none' stroke='%2300e5ff' stroke-width='6' stroke-linejoin='round'/%3E%3Cpath d='M55 29 L36 57 L48 57 L44 77 L65 46 L52 46 Z' fill='%23ff3d80'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -384,13 +384,13 @@ body.ui-hidden .touch-hint { opacity: 0; }
 <div id="loadingScreen" class="loading-screen">
   <div class="loader-ring"></div>
   <p>HOLOFORGE VIEWER</p>
-  <p class="load-ver">v1.4.7</p>
+  <p class="load-ver">v1.4.8</p>
 </div>
 
 <header class="app-header">
   <div class="title-group">
     <div class="app-title">⬡ HOLOFORGE</div>
-    <span class="version-badge" id="versionBadge">v1.4.7</span>
+    <span class="version-badge" id="versionBadge">v1.4.8</span>
   </div>
   <div class="header-actions">
     <label class="btn btn-text-hide" title="3Dファイルを開く">
@@ -1823,17 +1823,28 @@ async function getOcctImporter() {
   if (occtWasmReady) return occtWasmReady;
   setLoadStage('STEP/IGES 変換ライブラリを読み込んでいます…');
   setLoadPct(15);
-  // WASM の場所は document.currentScript からは自動判定できない（動的 import では null になる）ため、
-  // 読み込み元 CDN と同じ場所を locateFile で明示する。unpkg が失敗したら jsdelivr にフォールバック。
+  // occt-import-js の配布ファイルは UMD 形式で ES モジュールの export がないため、
+  // import() では本体を取得できない。通常の script タグで読み込むと
+  // グローバル変数 occtimportjs として使えるようになり、WASM の場所も
+  // そのスクリプトの URL から自動で決まる。念のため locateFile でも明示する。
   const cdnBases = [
     'https://unpkg.com/occt-import-js@0.0.21/dist/',
     'https://cdn.jsdelivr.net/npm/occt-import-js@0.0.21/dist/'
   ];
   for (const base of cdnBases) {
     try {
-      const mod = await import(base + 'occt-import-js.js');
-      const occt = mod.default || mod;
-      occtWasmReady = await occt({
+      if (!window.occtimportjs) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = base + 'occt-import-js.js';
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('script load failed: ' + s.src));
+          document.head.appendChild(s);
+        });
+      }
+      const occtFactory = window.occtimportjs;
+      if (typeof occtFactory !== 'function') throw new Error('occtimportjs が見つかりません');
+      occtWasmReady = await occtFactory({
         locateFile: (path) => path.endsWith('.wasm') ? base + path : path
       });
       return occtWasmReady;
@@ -1851,26 +1862,37 @@ async function loadSTEP_IGES(arrayBuffer, ext) {
   try {
     const occt = await getOcctImporter();
     setLoadPct(30);
-    const fileName = 'model.' + ext;
-    const result = await occt.ReadFile(fileName, new Uint8Array(arrayBuffer));
+    // occt-import-js 0.0.21 の API は形式ごとの ReadStepFile / ReadIgesFile で、
+    // 戻り値の attributes は position / normal の名前付きオブジェクト。
+    // （旧コードが呼んでいた ReadFile はこのバージョンには存在しない）
+    const content = new Uint8Array(arrayBuffer);
+    const result = (ext === 'iges' || ext === 'igs')
+      ? occt.ReadIgesFile(content, null)
+      : occt.ReadStepFile(content, null);
     setLoadPct(60);
-    if (!result || !result.meshes || !result.meshes.length) {
+    if (!result || result.success === false || !result.meshes || !result.meshes.length) {
       throw new Error('メッシュデータが見つかりません。ファイルが破損しているか、対応していない形式です。');
     }
     setLoadStage('メッシュを構築しています…');
     setLoadPct(70);
     const root = new THREE.Group();
-    const defaultMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 });
     for (const meshData of result.meshes) {
       const geo = new THREE.BufferGeometry();
-      const positions = new Float32Array(meshData.attributes[0].array);
-      const normals = meshData.attributes.length > 1 ? new Float32Array(meshData.attributes[1].array) : null;
+      const positions = new Float32Array(meshData.attributes.position.array);
+      const normals = meshData.attributes.normal ? new Float32Array(meshData.attributes.normal.array) : null;
       const indices = meshData.index ? new Uint32Array(meshData.index.array) : null;
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       if (normals) geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
       if (indices) geo.setIndex(new THREE.BufferAttribute(indices, 1));
       if (!normals) geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, defaultMat);
+      let mat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 });
+      if (Array.isArray(meshData.color) && meshData.color.length === 3) {
+        mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(meshData.color[0], meshData.color[1], meshData.color[2]),
+          roughness: 0.4, metalness: 0.3
+        });
+      }
+      const mesh = new THREE.Mesh(geo, mat);
       root.add(mesh);
     }
     setLoadPct(90);
@@ -3110,7 +3132,7 @@ if (state.isMobile) {
   setTimeout(() => document.getElementById('touchHint').classList.add('show'), 1200);
   setTimeout(() => document.getElementById('touchHint').classList.remove('show'), 6000);
 }
-setTimeout(() => showToast('HoloForge Viewer v1.4.7 (最新版)', 2600), 1000);
+setTimeout(() => showToast('HoloForge Viewer v1.4.8 (最新版)', 2600), 1000);
 </script>
 </body>
 </html>
